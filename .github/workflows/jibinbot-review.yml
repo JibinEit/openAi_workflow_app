@@ -1,4 +1,4 @@
-name: "JibinBot – PR Code Review"
+name: "brandOptics AI – PR Code Review"
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   review:
-    name: "Run JibinBot Review"
+    name: "Run Bot Review"
     runs-on: ubuntu-latest
 
     steps:
@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: "3.10"
 
-      # ── 3) INSTALL PYTHON DEPENDENCIES (incl. flake8-json) ─────────────
+      # ── 3) INSTALL PYTHON DEPENDENCIES ─────────────────────────────────
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -65,7 +65,6 @@ jobs:
       # ── 9) RUN ESLINT (JS/TS/React/Angular) ────────────────────────────
       - name: Run ESLint
         run: |
-          # Only run if there is at least one .js/.jsx/.ts/.tsx file
           FILES=$(find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \))
           if [ -n "$FILES" ]; then
             eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' \
@@ -76,7 +75,6 @@ jobs:
       # ── 10) RUN FLAKE8 (Python) ────────────────────────────────────────
       - name: Run Flake8
         run: |
-          # Only run if there is at least one .py file
           FILES=$(find . -type f -name "*.py")
           if [ -n "$FILES" ]; then
             flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
@@ -85,27 +83,23 @@ jobs:
       # ── 11) RUN SHELLCHECK (Shell scripts) ─────────────────────────────
       - name: Run ShellCheck
         run: |
-          # Only run if there is at least one .sh script
           FILES=$(find . -type f -name "*.sh")
           if [ -n "$FILES" ]; then
             find . -type f -name "*.sh" \
               | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
           fi
 
-      # ── 12) RUN DART/FLUTTER ANALYZER ─────────────────────────────────
+      # ── 12) RUN FLUTTER ANALYZER (Dart/Flutter) ─────────────────────────
       - name: Run Flutter Analyzer
         run: |
-          # Only run if this is a Flutter/Dart project (pubspec.yaml exists)
-          FILES=$(find . -type f -name "*.dart")
-          if [ -n "$FILES" ]; then
-            dart analyze --format=json "$FILES" \
-              > .github/linter-reports/dartanalyzer.json || true
+          # Only run if this is a Flutter/Dart project
+          if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
+            flutter analyze --format=json > .github/linter-reports/dartanalyzer.json || true
           fi
 
       # ── 13) RUN DOTNET FORMAT (C#/.NET) ────────────────────────────────
       - name: Run dotnet-format
         run: |
-          # Only run if there's a .csproj file (C#/.NET project)
           CS_FILES=$(find . -type f -name "*.csproj")
           if [ -n "$CS_FILES" ]; then
             dotnet tool install -g dotnet-format --version 7.* || true
@@ -113,8 +107,8 @@ jobs:
             dotnet format --verify-no-changes --dry-run --report .github/linter-reports/dotnet-format.json || true
           fi
 
-      # ── 14) RUN THE AI REVIEW SCRIPT ────────────────────────────────────
-      - name: Run JibinBot AI review
+      # ── 14) RUN THE AI REVIEW SCRIPT ───────────────────────────────────
+      - name: Run Bot AI review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
