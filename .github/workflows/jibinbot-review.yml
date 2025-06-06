@@ -1,14 +1,12 @@
 name: "JibinBot – PR Code Review"
 
-# ── 1) WHEN TO RUN ───────────────────────────────────────────────────────
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-# ── 2) PERMISSIONS ──────────────────────────────────────────────────────
 permissions:
-  contents: read          # to fetch the code
-  pull-requests: write    # to post review comments
+  contents: read
+  pull-requests: write
 
 jobs:
   review:
@@ -16,56 +14,86 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── 2.1) CHECKOUT THE CODE ─────────────────────────────────────────
+      # 1) CHECKOUT THE CODE
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0    # fetch full history so we can compute diffs
+          fetch-depth: 0
 
-      # ── 2.2) SET UP PYTHON ─────────────────────────────────────────────
+      # 2) SET UP PYTHON
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      # ── 2.3) INSTALL PYTHON DEPENDENCIES ───────────────────────────────
+      # 3) INSTALL PYTHON DEPENDENCIES (including flake8-json)
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install openai PyGithub
+          pip install openai PyGithub flake8 flake8-json
 
-      # ── 2.4) INSTALL COMMON LINTERS ───────────────────────────────────
-      - name: Install Node & ESLint
+      # 4) INSTALL NODE & ESLINT
+      - name: Set up Node 18
         uses: actions/setup-node@v4
         with:
           node-version: "18"
       - name: Install ESLint
+        run: npm install -g eslint
+
+      # 5) INSTALL SHELLCHECK
+      - name: Install ShellCheck
         run: |
-          npm install -g eslint
-      - name: Install Flake8 & ShellCheck
-        run: |
-          pip install flake8
           sudo apt-get update && sudo apt-get install -y shellcheck
 
-      # ── 2.5) RUN LINTERS → OUTPUT TO FILES ────────────────────────────
-      - name: Run ESLint (JavaScript/TypeScript)
-        run: |
-          # Exit code will be non-zero if lint errors exist.
-          # We capture output into a text file so our Python script can include it.
-          mkdir -p .github/linter-reports
-          eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' --format json --output-file .github/linter-reports/eslint.json || true
+      # 6) INSTALL .NET SDK (for C# linting/formatting)
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "7.0.x"
 
-      - name: Run Flake8 (Python)
-        run: |
-          mkdir -p .github/linter-reports
-          flake8 . --format=json > .github/linter-reports/flake8.json || true
+      # 7) SET UP DART/FLUTTER
+      - name: Install Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "stable"
 
-      - name: Run ShellCheck (Shell scripts)
-        run: |
-          mkdir -p .github/linter-reports
-          find . -type f -name "*.sh" | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
+      # 8) RUN LINTERS → OUTPUT TO FILES
+      - name: Create linter-reports directory
+        run: mkdir -p .github/linter-reports
 
-      # ── 2.6) RUN THE AI REVIEW SCRIPT ─────────────────────────────────
+      ## 8.1) ESLint (JS/TS/React/Angular)
+      - name: Run ESLint
+        run: |
+          eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' \
+            --format json \
+            --output-file .github/linter-reports/eslint.json || true
+
+      ## 8.2) Flake8 (Python, using flake8-json)
+      - name: Run Flake8
+        run: |
+          flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
+
+      ## 8.3) ShellCheck (shell scripts)
+      - name: Run ShellCheck
+        run: |
+          find . -type f -name "*.sh" \
+            | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
+
+      ## 8.4) Dart Analyzer (Flutter/Dart)
+      - name: Run Dart Analyzer
+        run: |
+          dart analyze --format=json \
+            > .github/linter-reports/dartanalyzer.json || true
+
+      ## 8.5) .NET Format Check (C#/.NET)
+      - name: Run dotnet format
+        run: |
+          dotnet tool install -g dotnet-format --version 7.* || true
+          PATH="$PATH:$HOME/.dotnet/tools"
+          mkdir -p .github/linter-reports
+          dotnet format --verify-no-changes --dry-run --report .github/linter-reports/dotnet-format.json || true
+
+      # 9) RUN THE AI REVIEW SCRIPT
       - name: Run JibinBot AI review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

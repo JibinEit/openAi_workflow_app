@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import json
-import subprocess
 from pathlib import Path
 
 import openai
@@ -14,7 +13,7 @@ REPO_NAME      = os.getenv("GITHUB_REPOSITORY")   # e.g. "username/repo"
 EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")   # path to the PR event JSON
 
 if not OPENAI_API_KEY:
-    print("⛔️ OpenAI API key not found in environment variable OPENAI_API_KEY.")
+    print("⛔️ OpenAI API key not found in OPENAI_API_KEY.")
     exit(1)
 
 openai.api_key = OPENAI_API_KEY
@@ -25,16 +24,12 @@ with open(EVENT_PATH, "r") as f:
     event = json.load(f)
 
 pr_number = event["pull_request"]["number"]
-base_sha  = event["pull_request"]["base"]["sha"]
-head_sha  = event["pull_request"]["head"]["sha"]
-
 repo = gh.get_repo(REPO_NAME)
 pr   = repo.get_pull(pr_number)
 
 # ── 3) GATHER CHANGED FILES & DIFFS ─────────────────────────────────────
 changed_files = []
 for f in pr.get_files():
-    # Only capture files with a patch (skips binary files)
     if f.patch:
         changed_files.append({
             "filename": f.filename,
@@ -48,39 +43,44 @@ if not changed_files:
     exit(0)
 
 # ── 4) READ LINTER OUTPUTS ──────────────────────────────────────────────
+def load_json_if_exists(path: Path):
+    if path.exists():
+        text = path.read_text().strip()
+        if text:
+            try:
+                return json.loads(text)
+            except Exception as e:
+                print(f"⚠️ Failed to parse JSON from {path}: {e}")
+                return None
+        else:
+            print(f"⚠️ File {path} is empty.")
+            return None
+    return None
+
 linter_reports = {}
 reports_dir = Path(".github/linter-reports")
 
-def load_json_if_exists(path: Path):
-    return json.loads(path.read_text()) if path.exists() else None
-
-linter_reports["eslint"]      = load_json_if_exists(reports_dir / "eslint.json")
-linter_reports["flake8"]      = load_json_if_exists(reports_dir / "flake8.json")
-linter_reports["shellcheck"]  = load_json_if_exists(reports_dir / "shellcheck.json")
+linter_reports["eslint"]         = load_json_if_exists(reports_dir / "eslint.json")
+linter_reports["flake8"]         = load_json_if_exists(reports_dir / "flake8.json")
+linter_reports["shellcheck"]     = load_json_if_exists(reports_dir / "shellcheck.json")
+linter_reports["dartanalyzer"]   = load_json_if_exists(reports_dir / "dartanalyzer.json")
+linter_reports["dotnet_format"]  = load_json_if_exists(reports_dir / "dotnet-format.json")
 
 # ── 5) BUILD THE GPT PROMPT ──────────────────────────────────────────────
 def build_prompt(changed_files, linter_reports):
-    """
-    Construct a prompt containing:
-    1) A human instruction block (“You are Jibin's Code Review Bot…”) 
-    2) The diff of each changed file
-    3) The lint-rule findings from ESLint, Flake8, ShellCheck
-    """
     instructions = (
         "You are **JibinBot**, an automated code-review assistant. "
         "Your job is to provide detailed feedback on coding best practices, style consistency, "
         "potential bugs, and any lint errors. "
         "Below you will see:\n\n"
         "  • A list of changed files with unified diffs\n"
-        "  • JSON outputs from ESLint (JavaScript/TypeScript), Flake8 (Python), and ShellCheck (shell scripts)\n\n"
-        "Review each file’s diff and the associated linter findings. "
-        "For each changed file, do the following:\n"
+        "  • JSON outputs from linters: ESLint, Flake8, ShellCheck, Dart Analyzer, and .NET Format\n\n"
+        "For each changed file:\n"
         "  1. Summarize any lint errors (if present).\n"
         "  2. Offer suggestions for code‐style improvements or best practices.\n"
         "  3. Point out any potential logical issues or security concerns.\n"
         "  4. Provide line‐level comments in a concise bullet list (if possible).\n\n"
-        "Format your response as Markdown. "
-        "Use headings like:\n"
+        "Format your response in Markdown. Use headings like:\n"
         "  ### File: path/to/file.ext\n"
         "Then list issues or suggestions.\n\n"
     )
@@ -106,13 +106,9 @@ full_prompt = build_prompt(changed_files, linter_reports)
 
 # ── 6) CALL OPENAI TO GET REVIEWER FEEDBACK ──────────────────────────────
 def call_openai_review(prompt: str) -> str:
-    """
-    Call OpenAI ChatCompletion (e.g. GPT-4 or GPT-3.5) with a low temperature.
-    Returns the assistant’s reply as plain text.
-    """
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",  # Or "gpt-3.5-turbo" if you prefer
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are JibinBot, an expert code reviewer."},
                 {"role": "user",   "content": prompt}
