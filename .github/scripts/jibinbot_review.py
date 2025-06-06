@@ -311,15 +311,15 @@ If you have any questions about the suggestions or need clarification on a parti
 
     # 3) Then set the failing status so branch protection will block merging
     repo.get_commit(full_sha).create_status(
-        context="brandOptics AI 🤖/code-review",
+        context="brandOptics AI code-review",
         state="failure",
-        description="❌🤖 Serious code issues detected! Please fix before merging. 🔧🚫"
+        description="Serious code issues detected! Please fix before merging."
     )
 else:
     repo.get_commit(full_sha).create_status(
-        context="brandOptics AI 🤖/code-review",
+        context="brandOptics AI code-review",
         state="success",
-        description="✅🤖 No code issues detected. Ready to merge! 🎉🚀"
+        description="No code issues detected. Ready to merge!"
     )
 
-print(f"🤖✨ brandOptics AI has 🚀 posted a sparkling code review summary on this PR! 🎉🔍✨ #{pr_number}.")
+print(f"brandOptics AI has 🚀 posted a sparkling code review summary on this PR! #{pr_number}.")
