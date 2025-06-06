@@ -65,6 +65,12 @@ class _MyHomePageState extends State<MyHomePage> {
           _incrementCounter();
         
           SampleClass sample = SampleClass();   
+
+
+          // Assuming SampleClass has a method called sampleMethod    
+
+          sample.sample
+Method(); // Call the method from SampleClass 
           sample.sampleMethod(); // Call the method from SampleClass
           print('SampleClass method called');
           // You can also use the sample object to access other properties or methods 
