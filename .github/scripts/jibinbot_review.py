@@ -216,8 +216,7 @@ def get_original_line(path: str, line_no: int) -> str:
 def ai_suggest_fix(code: str, original: str, file_path: str, line_no: int) -> str:
     """
     Call OpenAI to get a corrected version of the 'original' line.
-    We provide the lint code, the offending line, and ask GPT to output
-    just the corrected snippet (1-2 lines max).
+    Use the new openai>=1.0.0 interface (openai.chat.completions.create).
     """
     prompt = dedent(f"""
         You are a Dart/Flutter expert. Below is a single line of Dart code
@@ -234,7 +233,7 @@ def ai_suggest_fix(code: str, original: str, file_path: str, line_no: int) -> st
     """).strip()
 
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful Dart/Flutter assistant."},
@@ -248,7 +247,6 @@ def ai_suggest_fix(code: str, original: str, file_path: str, line_no: int) -> st
         suggestion = re.sub(r"^```dart\s*|\s*```$", "", suggestion).strip()
         return suggestion
     except Exception as e:
-        # On any API error, fall back to returning the original with a generic note
         return f"# (AI request failed: {e})\n{original}"
 
 
@@ -279,7 +277,6 @@ for file_path, file_issues in file_to_issues.items():
             if suggested:
                 md.append("  **Suggested (via OpenAI):**\n")
                 md.append("  ```dart\n")
-                # Indent multi-line suggestions by two spaces
                 for s_line in suggested.split("\n"):
                     md.append(f"  {s_line}\n")
                 md.append("  ```\n")
