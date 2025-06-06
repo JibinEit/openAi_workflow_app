@@ -224,7 +224,7 @@ file_to_issues: dict[str, list[dict]] = {}
 for issue in issues:
     file_to_issues.setdefault(issue["file"], []).append(issue)
 
-md = ["## 🤖 JibinBot – Code Review Suggestions\n"]
+md = ["## 🤖 brandOptics Bot – Code Review Suggestions\n"]
 
 for file_path, file_issues in file_to_issues.items():
     md.append(f"### File: `{file_path}`\n")
@@ -264,15 +264,15 @@ pr.create_issue_comment(summary_body)
 
 if issues:
     repo.get_commit(full_sha).create_status(
-        context="JibinBot/code-review",
+        context="brandOptics Bot 🤖/code-review",
         state="failure",
-        description="Serious code issues detected"
+        description="❌🤖 Serious code issues detected! Please fix before merging. 🔧🚫"
     )
 else:
     repo.get_commit(full_sha).create_status(
-        context="JibinBot/code-review",
-        state="success",
-        description="No code issues detected"
+         context="brandOptics Bot 🤖/code-review",
+         state="success",
+         description="✅🤖 No code issues detected. Ready to merge! 🎉🚀"
     )
 
-print(f"✅ JibinBot posted summary suggestions on PR #{pr_number}.")
+print(f"🤖✨ brandOptics Bot has 🚀 posted a sparkling code review summary on this PR! 🎉🔍✨ #{pr_number}.")
