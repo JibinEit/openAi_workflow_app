@@ -107,7 +107,7 @@ full_prompt = build_prompt(changed_files, linter_reports)
 # ── 6) CALL OPENAI TO GET REVIEWER FEEDBACK ──────────────────────────────
 def call_openai_review(prompt: str) -> str:
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are JibinBot, an expert code reviewer."},
