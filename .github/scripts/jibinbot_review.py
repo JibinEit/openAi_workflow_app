@@ -10,7 +10,7 @@ from github import Github
 
 # ── 1) ENVIRONMENT & CLIENT SETUP ───────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-BOT_TOKEN      = os.getenv("GITHUB_TOKEN")     # Your machine‐user PAT
+BOT_TOKEN      = os.getenv("GITHUB_TOKEN")     # Your PAT
 REPO_NAME      = os.getenv("GITHUB_REPOSITORY") # e.g. "username/repo"
 EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH") # path to the PR event JSON
 
@@ -154,24 +154,31 @@ if isinstance(shellcheck_report, list):
 
 # Dart Analyzer
 if isinstance(dartanalyzer_report, dict):
-    for issue in dartanalyzer_report.get("issues", []):
-        loc        = issue.get("location", {})
+    # NOTE: The JSON has a "diagnostics" array, not "issues"
+    for diagnostic in dartanalyzer_report.get("diagnostics", []):
+        loc        = diagnostic.get("location", {})
         abs_path   = loc.get("file")
+        if not abs_path:
+            continue
         rel_path   = os.path.relpath(abs_path, start=os.getcwd())
         if rel_path not in changed_files:
             continue
         range_info = loc.get("range", {}).get("start", {})
         line       = range_info.get("line")
-        text       = issue.get("message") or ""
+        text       = diagnostic.get("problemMessage") or diagnostic.get("message") or ""
+        code       = diagnostic.get("code") or "DartAnalyzer"
+        severity   = diagnostic.get("severity", "")
+        # Normalize severity text:
+        sev_text = "Error" if severity == "ERROR" else "Warning" if severity == "WARNING" else "Info"
         if line:
             issues.append({
                 "file":    rel_path,
                 "line":    line,
-                "code":    "DartAnalyzer",
-                "message": f"Warning: {text}"
+                "code":    code,
+                "message": f"{sev_text}: [{code}] {text}"
             })
 
-# .NET Format (SARIF‐like)
+# .NET Format (SARIF-like)
 if isinstance(dotnet_report, dict):
     diags = dotnet_report.get("Diagnostics") or dotnet_report.get("diagnostics")
     if isinstance(diags, list):
@@ -197,7 +204,6 @@ def get_original_line(path: str, line_no: int) -> str:
     try:
         with open(path, "r") as f:
             lines = f.readlines()
-            # 1-based line_no; ensure within bounds
             if 1 <= line_no <= len(lines):
                 return lines[line_no - 1].rstrip("\n")
     except Exception:
@@ -207,25 +213,25 @@ def get_original_line(path: str, line_no: int) -> str:
 
 def auto_suggest_fix(code: str, original: str) -> str:
     """
-    Provide a basic suggestion based on common lint codes:
+    Basic suggestions for common lint codes:
       - E221/E251/E261: collapse multiple spaces to single space
       - E501: wrap long lines at 79 chars
-      - unused imports/vars: comment out or remove
-      - print in production: replace with logger
-    If no rule matches, return a generic placeholder.
+      - unused-import / F401: remove the import
+      - unused-variable: comment out or remove
+      - avoid_print: replace print with logger
+    Otherwise, return a placeholder.
     """
     if code.startswith("E221") or code.startswith("E251") or code.startswith("E261"):
-        # collapse multiple spaces
         return re.sub(r" {2,}", " ", original)
     if code.startswith("E501"):
-        # wrap long line
         wrapped = wrap(original, width=79)
         return "\n".join(wrapped)
-    if code in ("unused-import", "F401", "unused-variable"):
-        return f"# Remove the unused code:\n# {original}"
+    if code in ("unused-import", "F401"):
+        return f"# Remove unused import:\n# {original}"
+    if code == "unused-variable":
+        return f"# Remove unused variable:\n# {original}"
     if "print" in original and code.lower().startswith("avoid_print"):
         return original.replace("print", "logger.info")
-    # Generic placeholder
     return f"# Suggestion: {original}"
 
 
@@ -234,27 +240,26 @@ file_to_issues: dict[str, list[dict]] = {}
 for issue in issues:
     file_to_issues.setdefault(issue["file"], []).append(issue)
 
-# Build summary comment in Markdown
+# Build the Markdown summary
 md = ["## 🤖 JibinBot – Code Review Suggestions\n"]
 
 for file_path, file_issues in file_to_issues.items():
     md.append(f"### File: `{file_path}`\n")
     for issue in sorted(file_issues, key=lambda x: x["line"]):
-        ln = issue["line"]
-        code = issue["code"]
-        msg = issue["message"]
-        original = get_original_line(file_path, ln)
+        ln        = issue["line"]
+        code      = issue["code"]
+        msg       = issue["message"]
+        original  = get_original_line(file_path, ln)
         suggested = auto_suggest_fix(code, original)
 
         md.append(f"- **Line {ln}**: {msg}\n")
         if original:
-            md.append("  ```python\n")
+            md.append("  ```dart\n")
             md.append(f"  {original}\n")
             md.append("  ```\n")
         if suggested:
             md.append("  **Suggested:**\n")
-            md.append("  ```python\n")
-            # Indent multi-line suggestions by two spaces
+            md.append("  ```dart\n")
             for s_line in suggested.split("\n"):
                 md.append(f"  {s_line}\n")
             md.append("  ```\n")
@@ -265,7 +270,7 @@ if not issues:
 
 summary_body = "\n".join(md)
 
-# Post the summary
+# Post the summary as a PR comment
 pr.create_issue_comment(summary_body)
 
 # ── 8) DISABLE MERGE IF SERIOUS ISSUES ──────────────────────────────────
