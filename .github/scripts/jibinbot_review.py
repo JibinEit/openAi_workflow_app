@@ -262,6 +262,13 @@ summary_body = "\n".join(md)
 pr.create_issue_comment(summary_body)
 
 if issues:
+    # 1) Leave a “Request changes” review on the PR
+    pr.create_review(
+        body="🔧 brandOptics AI found serious code issues. Please fix them before merging.",
+        event="REQUEST_CHANGES"
+    )
+
+    # 2) Then set the failing status so branch protection will block merging
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI 🤖/code-review",
         state="failure",
@@ -269,9 +276,9 @@ if issues:
     )
 else:
     repo.get_commit(full_sha).create_status(
-         context="brandOptics AI 🤖/code-review",
-         state="success",
-         description="✅🤖 No code issues detected. Ready to merge! 🎉🚀"
+        context="brandOptics AI 🤖/code-review",
+        state="success",
+        description="✅🤖 No code issues detected. Ready to merge! 🎉🚀"
     )
 
 print(f"🤖✨ brandOptics AI has 🚀 posted a sparkling code review summary on this PR! 🎉🔍✨ #{pr_number}.")
