@@ -1,3 +1,5 @@
+# .github/workflows/jibinbot-review.yml
+
 name: "brandOptics AI – PR Code Review"
 
 on:
@@ -89,25 +91,30 @@ jobs:
               | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
           fi
 
-      # ── 12) RUN FLUTTER ANALYZER (Dart/Flutter) ─────────────────────────
-      - name: Run Flutter Analyzer
+      # ── 12) FETCH DART/FLUTTER DEPENDENCIES ─────────────────────────────
+      - name: Fetch dependencies for Flutter/Dart
         run: |
-          # Only run if this is a Flutter/Dart project
+          if [ -f "pubspec.yaml" ]; then
+            flutter pub get
+          fi
+
+      # ── 13) RUN FLUTTER/DART ANALYZER ───────────────────────────────────
+      - name: Run Dart/Flutter Analyzer
+        run: |
           if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
-            flutter analyze --format=json > .github/linter-reports/dartanalyzer.json || true
+            dart analyze --format=json > .github/linter-reports/dartanalyzer.json || true
+          else
+            echo '{"issues":[]}' > .github/linter-reports/dartanalyzer.json
           fi
 
-      # ── 13) RUN DOTNET FORMAT (C#/.NET) ────────────────────────────────
-      - name: Run dotnet-format
+      # ── 14) DEBUG: SHOW FIRST LINES OF ANALYZER JSON ────────────────────
+      - name: Dump first lines of analyzer JSON
         run: |
-          CS_FILES=$(find . -type f -name "*.csproj")
-          if [ -n "$CS_FILES" ]; then
-            dotnet tool install -g dotnet-format --version 7.* || true
-            PATH="$PATH:$HOME/.dotnet/tools"
-            dotnet format --verify-no-changes --dry-run --report .github/linter-reports/dotnet-format.json || true
-          fi
+          echo "=== begin dartanalyzer.json ==="
+          head -n 20 .github/linter-reports/dartanalyzer.json || echo "(file is empty)"
+          echo "=== end dartanalyzer.json ==="
 
-      # ── 14) RUN THE AI REVIEW SCRIPT ───────────────────────────────────
+      # ── 15) RUN THE AI REVIEW SCRIPT ───────────────────────────────────
       - name: Run Bot AI review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
