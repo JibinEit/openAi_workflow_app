@@ -37,9 +37,9 @@ if not changed_files:
         "👀 brandOptics AI: No textual changes detected—nothing to review."
     )
     repo.get_commit(full_sha).create_status(
-        context="brandOptics AI 🤖/code-review",
+        context="brandOptics AI code-review",
         state="success",
-        description="✅ brandOptics AI: No issues detected. Ready to merge! 🎉🚀"
+        description="No issues detected. Ready to merge!"
     )
     exit(0)
 
@@ -76,10 +76,6 @@ def get_original_line(path: str, line_no: int) -> str:
 
 # ── 6) CALL OPENAI FOR A “BETTER” SUGGESTION ────────────────────────────
 def ai_suggest_fix(code: str, original: str, file_path: str, line_no: int) -> str:
-    """
-    Ask GPT-4o-mini to rewrite just the offending Dart line so it no
-    longer triggers the lint/diagnostic. Return only the corrected snippet.
-    """
     prompt = dedent(f"""
         You are a Dart/Flutter expert. Below is a single line of Dart code
         from file `{file_path}`, line {line_no}, which triggers lint/analysis
@@ -105,7 +101,6 @@ def ai_suggest_fix(code: str, original: str, file_path: str, line_no: int) -> st
             max_tokens=60
         )
         suggestion = response.choices[0].message.content.strip()
-        # Strip triple backticks if present
         return re.sub(r"^```dart\s*|\s*```$", "", suggestion).strip()
     except Exception as e:
         return f"# (AI request failed: {e})\n{original}"
@@ -120,7 +115,6 @@ if isinstance(eslint_report, list):
         if not abs_path:
             continue
         rel_path = os.path.relpath(abs_path, start=os.getcwd())
-        # Skip files in .github/
         if rel_path.startswith(".github/"):
             continue
         if rel_path not in changed_files:
@@ -134,9 +128,9 @@ if isinstance(eslint_report, list):
             full_msg = f"{sev_text}: [{code}] {text}"
             if line:
                 issues.append({
-                    "file":    rel_path,
-                    "line":    line,
-                    "code":    code or "ESLint",
+                    "file": rel_path,
+                    "line": line,
+                    "code": code or "ESLint",
                     "message": full_msg
                 })
 
@@ -144,7 +138,6 @@ if isinstance(eslint_report, list):
 if isinstance(flake8_report, dict):
     for abs_path, errors in flake8_report.items():
         rel_path = os.path.relpath(abs_path, start=os.getcwd())
-        # Skip files in .github/
         if rel_path.startswith(".github/"):
             continue
         if rel_path not in changed_files:
@@ -155,9 +148,9 @@ if isinstance(flake8_report, dict):
             text = err.get("text") or ""
             if line:
                 issues.append({
-                    "file":    rel_path,
-                    "line":    line,
-                    "code":    code,
+                    "file": rel_path,
+                    "line": line,
+                    "code": code,
                     "message": f"Warning: [{code}] {text}"
                 })
 
@@ -166,7 +159,6 @@ if isinstance(shellcheck_report, list):
     for entry in shellcheck_report:
         abs_path = entry.get("file")
         rel_path = os.path.relpath(abs_path, start=os.getcwd())
-        # Skip files in .github/
         if rel_path.startswith(".github/"):
             continue
         if rel_path not in changed_files:
@@ -176,9 +168,9 @@ if isinstance(shellcheck_report, list):
         text = entry.get("message") or ""
         if line:
             issues.append({
-                "file":    rel_path,
-                "line":    line,
-                "code":    code,
+                "file": rel_path,
+                "line": line,
+                "code": code,
                 "message": f"Warning: [{code}] {text}"
             })
 
@@ -190,7 +182,6 @@ if isinstance(dartanalyzer_report, dict):
         if not abs_path:
             continue
         rel_path = os.path.relpath(abs_path, start=os.getcwd())
-        # Skip files in .github/
         if rel_path.startswith(".github/"):
             continue
         if rel_path not in changed_files:
@@ -207,9 +198,9 @@ if isinstance(dartanalyzer_report, dict):
         )
         if line:
             issues.append({
-                "file":    rel_path,
-                "line":    line,
-                "code":    code,
+                "file": rel_path,
+                "line": line,
+                "code": code,
                 "message": f"{sev_text}: [{code}] {text}"
             })
 
@@ -220,7 +211,6 @@ if isinstance(dotnet_report, dict):
         for d in diags:
             abs_path = d.get("Path") or d.get("path") or ""
             rel_path = os.path.relpath(abs_path, start=os.getcwd())
-            # Skip files in .github/
             if rel_path.startswith(".github/"):
                 continue
             if rel_path not in changed_files:
@@ -230,73 +220,76 @@ if isinstance(dotnet_report, dict):
             message = d.get("Message") or d.get("message") or ""
             if line:
                 issues.append({
-                    "file":    rel_path,
-                    "line":    line,
-                    "code":    "DotNetFormat",
+                    "file": rel_path,
+                    "line": line,
+                    "code": "DotNetFormat",
                     "message": f"Warning: {message}"
                 })
 
-# ── 8) BUILD A PER-FILE TABLE IN MARKDOWN (using inline code only) ─────
+# ── 8) ORGANIZE ISSUES BY FILE ─────────────────────────────────────────
 file_to_issues: dict[str, list[dict]] = {}
 for issue in issues:
     file_to_issues.setdefault(issue["file"], []).append(issue)
 
+# ── 9) BUILD INDEX WITH ISSUE COUNTS & DETAILED TABLES ─────────────────
 md = ["## 🤖 brandOptics AI – Automated Code Review Suggestions\n"]
 
-for file_path, file_issues in file_to_issues.items():
-    md.append(f"### File: `{file_path}`\n")
-    # Table header (blank line before / after to ensure proper rendering)
-    md.append("")
-    md.append("| Line | Lint / Diagnostic                         | Original Code                           | Suggested Fix                              |")
-    md.append("|:----:|:-------------------------------------------|:----------------------------------------|:--------------------------------------------|")
+if issues:
+    total_issues   = len(issues)
+    files_affected = len(file_to_issues)
 
-    for issue in sorted(file_issues, key=lambda x: x["line"]):
-        ln       = issue["line"]
-        code     = issue["code"]
-        msg      = issue["message"]
-        original = get_original_line(file_path, ln).strip()
-        suggested = ai_suggest_fix(code, original, file_path, ln).splitlines()[0].strip()
+    # 9.1) Overall summary
+    md.append(f"⚠️ **Overall Summary:** {total_issues} issue{'s' if total_issues != 1 else ''} found across {files_affected} file{'s' if files_affected != 1 else ''}.\n")
 
-        # Escape any backticks or pipes inside the code snippet
-        orig_escaped = original.replace("`", "\\`").replace("|", "\\|")
-        sugg_escaped = suggested.replace("`", "\\`").replace("|", "\\|")
+    # 9.2) Index of files with issue counts
+    md.append("### Index of Affected Files\n")
+    for file_path in sorted(file_to_issues.keys()):
+        count = len(file_to_issues[file_path])
+        anchor = file_path.lower().replace("/", "").replace(".", "")
+        md.append(f"- [{file_path}](#{anchor}) — {count} issue{'s' if count != 1 else ''}")
+    md.append("")  # blank line before details
 
-        # Now wrap each single-line snippet in single backticks
-        lint_cell = f"`{code}`<br>{msg}"
-        orig_cell = f"`{orig_escaped}`"
-        sugg_cell = f"`{sugg_escaped}`"
+    # 9.3) Detailed per-file tables
+    for file_path, file_issues in sorted(file_to_issues.items()):
+        anchor = file_path.lower().replace("/", "").replace(".", "")
+        md.append(f"### File: `{file_path}`\n<a name=\"{anchor}\"></a>")
+        md.append("| Line | Lint / Diagnostic                         | Original Code                           | Suggested Fix                              |")
+        md.append("|:----:|:-------------------------------------------|:----------------------------------------|:--------------------------------------------|")
 
-        md.append(f"|  {ln}   | {lint_cell} | {orig_cell} | {sugg_cell} |")
+        for issue in sorted(file_issues, key=lambda x: x["line"]):
+            ln       = issue["line"]
+            code     = issue["code"]
+            msg      = issue["message"]
+            original = get_original_line(file_path, ln).strip()
+            suggested = ai_suggest_fix(code, original, file_path, ln).splitlines()[0].strip()
 
-    md.append("")  # blank line after each table
+            orig_escaped = original.replace("`", "\\`").replace("|", "\\|")
+            sugg_escaped = suggested.replace("`", "\\`").replace("|", "\\|")
 
-if not issues:
-    md.append("No lint or analyzer issues found.\n")
+            lint_cell = f"`{code}`<br>{msg}"
+            orig_cell = f"`{orig_escaped}`"
+            sugg_cell = f"`{sugg_escaped}`"
+
+            md.append(f"|  {ln}   | {lint_cell} | {orig_cell} | {sugg_cell} |")
+        md.append("")  # blank line after each file’s table
+
+else:
+    md.append("brandOptics AI: No issues detected. Your submission has successfully passed the brandOptics neural network analysis. Excellent work maintaining high standards.\n")
 
 summary_body = "\n".join(md)
 
-# ── 9) POST THE COMMENT & SET STATUS ───────────────────────────────────
+# ── 10) POST THE COMMENT & SET STATUS ──────────────────────────────────
 pr.create_issue_comment(summary_body)
 
 if issues:
-    # 1) Compute a brief high-level summary of total issues
-    total_issues = len(issues)
-    files_affected = len(file_to_issues)
-
-    overall_summary = (
-        f"⚠️ **Overall Summary:** {total_issues} issue"
-        f"{'s' if total_issues != 1 else ''} found across {files_affected} file"
-        f"{'s' if files_affected != 1 else ''}."
-    )
-
-    # 2) Leave a “Request changes” review on the PR, including the overall summary
+    # Leave a “Request changes” review with overall guidance
     pr.create_review(
         body=f"""
-{overall_summary}
+⚠️ **Overall Summary:** {total_issues} issue{'s' if total_issues != 1 else ''} found across {files_affected} file{'s' if files_affected != 1 else ''}.
 
 ✨🚫 **Hey there! brandOptics AI spotted some critical issues that need your attention before merging.** ✨
 
-> Please review the table above for details. Below is what you’ll need to do:
+> Please review the tables above for details. Below is what you’ll need to do:
 >
 > • **Fix Syntax Errors**  
 > • **Address Lint Warnings**  
@@ -309,7 +302,6 @@ If you have any questions about the suggestions or need clarification on a parti
         event="REQUEST_CHANGES"
     )
 
-    # 3) Then set the failing status so branch protection will block merging
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI code-review",
         state="failure",
@@ -322,4 +314,4 @@ else:
         description="No code issues detected. Ready to merge!"
     )
 
-print(f"brandOptics AI has 🚀 posted a sparkling code review summary on this PR! #{pr_number}.")
+print(f"brandOptics AI has posted a consolidated code review summary on this PR! #{pr_number}.")
