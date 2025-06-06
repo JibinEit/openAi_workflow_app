@@ -64,17 +64,13 @@ class _MyHomePageState extends State<MyHomePage> {
         onPressed: () {
           _incrementCounter();
         
-          var i;
-          int j;
-
-          print()
-
-          var shffhsk= JangoClass(
-            name: 'Sample',
-            age: 25,
-            isActive: true,
-          );
-          print(shffhsk.name);
+          SampleClass sample = SampleClass();   
+          sample.sampleMethod(); // Call the method from SampleClass
+          print('SampleClass method called');
+          
+          // You can also access the properties of SampleClass if needed  
+          print('SampleClass property value: ${sample.sampleProperty}');
+          
         },
         tooltip: 'Increment',
         child: const Icon(Icons.add),
