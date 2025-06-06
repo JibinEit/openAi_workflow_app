@@ -3,6 +3,7 @@ import os
 import json
 import re
 from pathlib import Path
+from textwrap import wrap
 
 import openai
 from github import Github
@@ -26,20 +27,13 @@ with open(EVENT_PATH, "r") as f:
     event = json.load(f)
 
 pr_number = event["pull_request"]["number"]
-full_sha  = event["pull_request"]["head"]["sha"]  # <<< full commit SHA
+full_sha  = event["pull_request"]["head"]["sha"]  # Full commit SHA
 repo      = gh.get_repo(REPO_NAME)
 pr        = repo.get_pull(pr_number)
-pr_author = pr.user.login  # to tag in comments
 
 
 # ── 3) GATHER CHANGED FILES & DIFFS ─────────────────────────────────────
-changed_files = []
-for f in pr.get_files():
-    if f.patch:
-        changed_files.append({
-            "filename": f.filename,
-            "patch":    f.patch
-        })
+changed_files = [f.filename for f in pr.get_files() if f.patch]
 
 if not changed_files:
     pr.create_issue_comment(
@@ -77,160 +71,204 @@ dotnet_report       = load_json_if_exists(reports_dir / "dotnet-format.json")
 
 # ── 5) HELPER: COMPUTE DIFF POSITION FOR INLINE COMMENT ─────────────────
 def compute_diff_position(patch: str, target_line: int) -> int | None:
-    """
-    Given a unified diff 'patch' and a 1-based 'target_line' in the new file,
-    return the 0-based 'position' in that diff where the new-file line occurs.
-    Returns None if not found in the hunk.
-    """
     position = 0
     new_line = None
-
     for row in patch.splitlines():
         if row.startswith("@@"):
             m = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", row)
             if m:
                 new_line = int(m.group(1)) - 1
             continue
-
         if new_line is None:
             continue
-
         if row.startswith("+") or row.startswith(" "):
             new_line += 1
             if new_line == target_line:
                 return position
             position += 1
-
     return None
 
 
 # ── 6) EXTRACT ALL ISSUES FROM LINTER OUTPUTS ───────────────────────────
-issues: list[dict] = []  # Each: {"file": str, "line": int, "message": str}
+issues: list[dict] = []  # Each: {"file": str, "line": int, "code": str, "message": str}
 
-# 6.1) ESLint → array of { filePath, messages:[{line, ruleId, message, severity}] }
+# ESLint
 if isinstance(eslint_report, list):
     for file_report in eslint_report:
         abs_path = file_report.get("filePath")
         if not abs_path:
             continue
         rel_path = os.path.relpath(abs_path, start=os.getcwd())
+        if rel_path not in changed_files:
+            continue
         for msg in file_report.get("messages", []):
             line     = msg.get("line")
-            rule     = msg.get("ruleId") or ""
+            code     = msg.get("ruleId") or ""
             text     = msg.get("message") or ""
             severity = msg.get("severity", 0)
             sev_text = "Error" if severity == 2 else "Warning"
-            full_msg = f"ESLint ({sev_text}): [{rule}] {text}"
+            full_msg = f"{sev_text}: [{code}] {text}"
             if line:
                 issues.append({
                     "file":    rel_path,
                     "line":    line,
+                    "code":    code or "ESLint",
                     "message": full_msg
                 })
 
-# 6.2) Flake8 → dict of { abs_path: [ {line_number, code, text}, ... ] }
+# Flake8
 if isinstance(flake8_report, dict):
     for abs_path, errors in flake8_report.items():
         rel_path = os.path.relpath(abs_path, start=os.getcwd())
+        if rel_path not in changed_files:
+            continue
         for err in errors:
             line = err.get("line_number") or err.get("line") or None
             code = err.get("code") or ""
             text = err.get("text") or ""
             if line:
-                full_msg = f"Flake8: [{code}] {text}"
                 issues.append({
                     "file":    rel_path,
                     "line":    line,
-                    "message": full_msg
+                    "code":    code,
+                    "message": f"Warning: [{code}] {text}"
                 })
 
-# 6.3) ShellCheck → array of { file, line, code, message }
+# ShellCheck
 if isinstance(shellcheck_report, list):
     for entry in shellcheck_report:
         abs_path = entry.get("file")
-        line     = entry.get("line")
-        code     = entry.get("code") or ""
-        text     = entry.get("message") or ""
         rel_path = os.path.relpath(abs_path, start=os.getcwd())
+        if rel_path not in changed_files:
+            continue
+        line = entry.get("line")
+        code = entry.get("code") or ""
+        text = entry.get("message") or ""
         if line:
             issues.append({
                 "file":    rel_path,
                 "line":    line,
-                "message": f"ShellCheck: [{code}] {text}"
+                "code":    code,
+                "message": f"Warning: [{code}] {text}"
             })
 
-# 6.4) Dart Analyzer → { "issues": [ { location:{file, range:{start:{line}}}, message }, ... ] }
+# Dart Analyzer
 if isinstance(dartanalyzer_report, dict):
     for issue in dartanalyzer_report.get("issues", []):
         loc        = issue.get("location", {})
         abs_path   = loc.get("file")
+        rel_path   = os.path.relpath(abs_path, start=os.getcwd())
+        if rel_path not in changed_files:
+            continue
         range_info = loc.get("range", {}).get("start", {})
         line       = range_info.get("line")
         text       = issue.get("message") or ""
-        rel_path   = os.path.relpath(abs_path, start=os.getcwd())
         if line:
             issues.append({
                 "file":    rel_path,
                 "line":    line,
-                "message": f"Dart Analyzer: {text}"
+                "code":    "DartAnalyzer",
+                "message": f"Warning: {text}"
             })
 
-# 6.5) .NET Format → { "Diagnostics": [ { Path, Region:{StartLine}, Message }, ... ] }
+# .NET Format (SARIF‐like)
 if isinstance(dotnet_report, dict):
     diags = dotnet_report.get("Diagnostics") or dotnet_report.get("diagnostics")
     if isinstance(diags, list):
         for d in diags:
             abs_path = d.get("Path") or d.get("path") or ""
-            region   = d.get("Region") or d.get("region") or {}
-            line     = region.get("StartLine") or region.get("startLine") or None
-            message  = d.get("Message") or d.get("message") or ""
-            if abs_path and line:
-                rel_path = os.path.relpath(abs_path, start=os.getcwd())
+            rel_path = os.path.relpath(abs_path, start=os.getcwd())
+            if rel_path not in changed_files:
+                continue
+            region  = d.get("Region") or d.get("region") or {}
+            line    = region.get("StartLine") or region.get("startLine") or None
+            message = d.get("Message") or d.get("message") or ""
+            if line:
                 issues.append({
                     "file":    rel_path,
                     "line":    line,
-                    "message": f".NET Format: {message}"
+                    "code":    "DotNetFormat",
+                    "message": f"Warning: {message}"
                 })
 
 
-# ── 7) POST INLINE COMMENTS FOR EACH ISSUE ───────────────────────────────
-summary_issues: list[str] = []
-
-for issue in issues:
-    file_path = issue["file"]
-    line_num  = issue["line"]
-    msg       = issue["message"]
-
-    # Only attempt inline if the file was changed in this PR
-    matching = [c for c in changed_files if c["filename"] == file_path]
-    if not matching:
-        summary_issues.append(f"- `{file_path}`:{line_num} → {msg}")
-        continue
-
-    patch    = matching[0]["patch"]
-    position = compute_diff_position(patch, line_num)
-    if position is None:
-        summary_issues.append(f"- `{file_path}`:{line_num} → {msg}")
-        continue
-
-    body = f"@{pr_author} ⚠️ {msg}"
+# ── 7) BUILD SUMMARY WITH SUGGESTIONS ───────────────────────────────────
+def get_original_line(path: str, line_no: int) -> str:
     try:
-        # Positional arguments: (body, commit_id, path, position)
-        pr.create_review_comment(body, full_sha, file_path, position)
-    except Exception as e:
-        summary_issues.append(f"- `{file_path}`:{line_num} → {msg} (failed inline: {e})")
+        with open(path, "r") as f:
+            lines = f.readlines()
+            # 1-based line_no; ensure within bounds
+            if 1 <= line_no <= len(lines):
+                return lines[line_no - 1].rstrip("\n")
+    except Exception:
+        pass
+    return ""
 
 
-# ── 8) IF ANY ISSUES REMAIN, POST A SUMMARY COMMENT ──────────────────────
-if summary_issues:
-    combined = (
-        "**🔎 JibinBot found issues that couldn’t be placed inline:**\n\n"
-        + "\n".join(summary_issues)
-    )
-    pr.create_issue_comment(combined)
+def auto_suggest_fix(code: str, original: str) -> str:
+    """
+    Provide a basic suggestion based on common lint codes:
+      - E221/E251/E261: collapse multiple spaces to single space
+      - E501: wrap long lines at 79 chars
+      - unused imports/vars: comment out or remove
+      - print in production: replace with logger
+    If no rule matches, return a generic placeholder.
+    """
+    if code.startswith("E221") or code.startswith("E251") or code.startswith("E261"):
+        # collapse multiple spaces
+        return re.sub(r" {2,}", " ", original)
+    if code.startswith("E501"):
+        # wrap long line
+        wrapped = wrap(original, width=79)
+        return "\n".join(wrapped)
+    if code in ("unused-import", "F401", "unused-variable"):
+        return f"# Remove the unused code:\n# {original}"
+    if "print" in original and code.lower().startswith("avoid_print"):
+        return original.replace("print", "logger.info")
+    # Generic placeholder
+    return f"# Suggestion: {original}"
 
 
-# ── 9) DISABLE MERGE IF SERIOUS ISSUES ──────────────────────────────────
+# Organize by file → list of issues
+file_to_issues: dict[str, list[dict]] = {}
+for issue in issues:
+    file_to_issues.setdefault(issue["file"], []).append(issue)
+
+# Build summary comment in Markdown
+md = ["## 🤖 JibinBot – Code Review Suggestions\n"]
+
+for file_path, file_issues in file_to_issues.items():
+    md.append(f"### File: `{file_path}`\n")
+    for issue in sorted(file_issues, key=lambda x: x["line"]):
+        ln = issue["line"]
+        code = issue["code"]
+        msg = issue["message"]
+        original = get_original_line(file_path, ln)
+        suggested = auto_suggest_fix(code, original)
+
+        md.append(f"- **Line {ln}**: {msg}\n")
+        if original:
+            md.append("  ```python\n")
+            md.append(f"  {original}\n")
+            md.append("  ```\n")
+        if suggested:
+            md.append("  **Suggested:**\n")
+            md.append("  ```python\n")
+            # Indent multi-line suggestions by two spaces
+            for s_line in suggested.split("\n"):
+                md.append(f"  {s_line}\n")
+            md.append("  ```\n")
+    md.append("\n")
+
+if not issues:
+    md.append("No lint or analyzer issues found.\n")
+
+summary_body = "\n".join(md)
+
+# Post the summary
+pr.create_issue_comment(summary_body)
+
+# ── 8) DISABLE MERGE IF SERIOUS ISSUES ──────────────────────────────────
 if issues:
     repo.get_commit(full_sha).create_status(
         context     = "JibinBot/code-review",
@@ -244,86 +282,4 @@ else:
         description = "No code issues detected"
     )
 
-
-# ── 10) RUN AI‐DRIVEN CODE REVIEW & SUGGESTIONS ──────────────────────────
-def build_review_prompt(changed_files, linter_reports):
-    """
-    Now we ask GPT to review each file, point out bad patterns,
-    and suggest coding‐standard improvements (no specific line numbers).
-    """
-    instructions = (
-        "You are **JibinBot**, an expert code reviewer.\n\n"
-        "For each changed file below, do the following:\n"
-        "  1. Point out major code‐quality issues or design flaws.\n"
-        "  2. Suggest specific coding‐standard improvements (naming, spacing, best practices).\n"
-        "  3. Give examples of how to refactor small snippets if applicable.\n\n"
-        "Do NOT reference exact line numbers—just speak in terms of the file and code contexts.\n\n"
-        "Format your response as Markdown with headings:\n"
-        "  ### File: path/to/file.ext\n"
-        "- <Your code‐review bullet points>\n\n"
-    )
-
-    prompt = instructions
-
-    # Append each diff
-    for c in changed_files:
-        prompt += (
-            f"\n\n---\n**Diff for file:** `{c['filename']}`\n"
-            f"```\n{c['patch']}\n```\n"
-        )
-
-    # Append raw JSON under each heading
-    prompt += "\n\n---\n**Linter outputs (raw JSON):**\n"
-    for name, report in [
-        ("ESLINT",        eslint_report),
-        ("FLAKE8",        flake8_report),
-        ("SHELLCHECK",    shellcheck_report),
-        ("DARTANALYZER",  dartanalyzer_report),
-        (".NET_FORMAT",   dotnet_report),
-    ]:
-        if report:
-            snippet = json.dumps(report, indent=2)
-            prompt += f"\n**{name}**:\n```\n{snippet}\n```\n"
-        else:
-            prompt += f"\n**{name}**: _No issues or not applicable_\n"
-
-    return prompt
-
-
-full_prompt = build_review_prompt(
-    changed_files,
-    {
-        "eslint":        eslint_report,
-        "flake8":        flake8_report,
-        "shellcheck":    shellcheck_report,
-        "dartanalyzer":  dartanalyzer_report,
-        "dotnet_format": dotnet_report,
-    }
-)
-
-
-def call_openai_review(prompt: str) -> str:
-    try:
-        response = openai.chat.completions.create(
-            model       = "gpt-4o-mini",
-            messages    = [
-                {"role": "system", "content": "You are JibinBot, an expert code reviewer."},
-                {"role": "user",   "content": prompt},
-            ],
-            temperature = 0.2,
-            max_tokens  = 1200
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        err = str(e)
-        if "quota" in err or "insufficient_quota" in err:
-            return "❌ **OpenAI quota exceeded.** Please top up your credits."
-        return f"❌ **JibinBot encountered an OpenAI error:** {e}"
-
-
-review_text = call_openai_review(full_prompt)
-pr.create_issue_comment(
-    f"## 🤖 JibinBot – File‐Level Code Review & Suggestions\n\n{review_text}"
-)
-
-print(f"✅ JibinBot posted inline comments, status, and detailed review on PR #{pr_number}.")
+print(f"✅ JibinBot posted summary suggestions on PR #{pr_number}.")
