@@ -10,16 +10,16 @@ from github import Github
 
 # ── 1) ENVIRONMENT & CLIENT SETUP ───────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-BOT_TOKEN      = os.getenv("GITHUB_TOKEN")
+AI_TOKEN      = os.getenv("GITHUB_TOKEN")
 REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
 EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
 
-if not OPENAI_API_KEY or not BOT_TOKEN:
+if not OPENAI_API_KEY or not AI_TOKEN:
     print("⛔️ Missing either OPENAI_API_KEY or GITHUB_TOKEN.")
     exit(1)
 
 openai.api_key = OPENAI_API_KEY
-gh = Github(BOT_TOKEN)
+gh = Github(AI_TOKEN)
 
 # ── 2) READ THE PULL REQUEST PAYLOAD ────────────────────────────────────
 with open(EVENT_PATH, "r") as f:
@@ -33,11 +33,11 @@ pr        = repo.get_pull(pr_number)
 # ── 3) GATHER CHANGED FILES → if no changes, exit early ─────────────────
 changed_files = [f.filename for f in pr.get_files() if f.patch]
 if not changed_files:
-    pr.create_issue_comment("👀 JibinBot: No textual changes detected—nothing to review.")
+    pr.create_issue_comment("👀 brandOptics AI: No textual changes detected—nothing to review.")
     repo.get_commit(full_sha).create_status(
-        context="JibinBot/code-review",
-        state="success",
-        description="No issues detected"
+    context="brandOptics AI 🤖/code-review",
+    state="success",
+    description="✅ brandOptics AI: No issues detected. Ready to merge! 🎉🚀"
     )
     exit(0)
 
@@ -219,40 +219,39 @@ if isinstance(dotnet_report, dict):
                     "message": f"Warning: {message}"
                 })
 
-# ── 8) BUILD A PER-FILE TABLE IN MARKDOWN ────────────────────────────
+# ── 8) BUILD A PER-FILE TABLE IN MARKDOWN (using inline code only) ─────
 file_to_issues: dict[str, list[dict]] = {}
 for issue in issues:
     file_to_issues.setdefault(issue["file"], []).append(issue)
 
-md = ["## 🤖 brandOptics Bot – Code Review Suggestions\n"]
+md = ["## 🤖 brandOptics AI – Automated Code Review Suggestions\n"]
 
 for file_path, file_issues in file_to_issues.items():
     md.append(f"### File: `{file_path}`\n")
-
-    # 8.1) Table header
-    md.append("| Line | Lint / Diagnostic | Original Code | Suggested Fix |")
-    md.append("|------|-------------------|---------------|---------------|")
+    # Table header (blank line before / after to ensure proper rendering)
+    md.append("")  
+    md.append("| Line | Lint / Diagnostic                         | Original Code                           | Suggested Fix                              |")
+    md.append("|:----:|:-------------------------------------------|:----------------------------------------|:--------------------------------------------|")
 
     for issue in sorted(file_issues, key=lambda x: x["line"]):
         ln       = issue["line"]
         code     = issue["code"]
         msg      = issue["message"]
-        original = get_original_line(file_path, ln)
-        suggested = ai_suggest_fix(code, original, file_path, ln)
+        original = get_original_line(file_path, ln).strip()
+        suggested = ai_suggest_fix(code, original, file_path, ln).splitlines()[0].strip()
 
-        # Escape pipe characters inside code
-        orig_escaped = original.replace("|", "\\|")
-        sugg_escaped = suggested.replace("|", "\\|")
+        # Escape any backticks or pipes inside the code snippet
+        orig_escaped = original.replace("`", "\\`").replace("|", "\\|")
+        sugg_escaped = suggested.replace("`", "\\`").replace("|", "\\|")
 
-        # Put each code snippet in a single‐line backtick block.
-        md.append(
-            f"| {ln} "
-            f"| `{code}`<br>{msg} "
-            f"| ```dart {orig_escaped} ``` "
-            f"| ```dart {sugg_escaped} ``` |"
-        )
+        # Now wrap each single‐line snippet in single backticks
+        lint_cell = f"`{code}`<br>{msg}"
+        orig_cell = f"`{orig_escaped}`"
+        sugg_cell = f"`{sugg_escaped}`"
 
-    md.append("\n")
+        md.append(f"|  {ln}   | {lint_cell} | {orig_cell} | {sugg_cell} |")
+
+    md.append("")  # blank line after each table
 
 if not issues:
     md.append("No lint or analyzer issues found.\n")
@@ -264,15 +263,15 @@ pr.create_issue_comment(summary_body)
 
 if issues:
     repo.get_commit(full_sha).create_status(
-        context="brandOptics Bot 🤖/code-review",
+        context="brandOptics AI 🤖/code-review",
         state="failure",
         description="❌🤖 Serious code issues detected! Please fix before merging. 🔧🚫"
     )
 else:
     repo.get_commit(full_sha).create_status(
-         context="brandOptics Bot 🤖/code-review",
+         context="brandOptics AI 🤖/code-review",
          state="success",
          description="✅🤖 No code issues detected. Ready to merge! 🎉🚀"
     )
 
-print(f"🤖✨ brandOptics Bot has 🚀 posted a sparkling code review summary on this PR! 🎉🔍✨ #{pr_number}.")
+print(f"🤖✨ brandOptics AI has 🚀 posted a sparkling code review summary on this PR! 🎉🔍✨ #{pr_number}.")
