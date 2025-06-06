@@ -69,7 +69,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
           print()
 
-          var shffhsk= SampleClass(
+          var shffhsk= JangoClass(
             name: 'Sample',
             age: 25,
             isActive: true,
