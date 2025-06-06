@@ -263,11 +263,36 @@ pr.create_issue_comment(summary_body)
 
 if issues:
     # 1) Leave a “Request changes” review on the PR
-    pr.create_review(
-        body="🔧 brandOptics AI found serious code issues. Please fix them before merging.",
-        event="REQUEST_CHANGES"
-    )
+# First, compute a brief high-level summary of total issues
+total_issues = len(issues)
+files_affected = len(file_to_issues)
 
+# Build an overall summary string
+overall_summary = (
+    f"⚠️ **Overall Summary:** {total_issues} issue"
+    f"{'s' if total_issues != 1 else ''} found across {files_affected} file"
+    f"{'s' if files_affected != 1 else ''}."
+)
+
+# Now create the review with summary + detailed instructions
+pr.create_review(
+    body=f"""
+{overall_summary}
+
+✨🚫 **Hey there! brandOptics AI spotted some critical issues that need your attention before merging.** ✨
+
+> Please review the table above for details. Below is what you’ll need to do:
+>
+> • **Fix Syntax Errors**  
+> • **Address Lint Warnings**  
+> • **Remove Unused or Undefined Symbols**
+
+Once you’ve applied these corrections and pushed a new commit, this check will pass and the merge button will be enabled.
+
+If you have any questions about the suggestions or need clarification on a particular issue, feel free to ask! 😊
+""",
+    event="REQUEST_CHANGES"
+)
     # 2) Then set the failing status so branch protection will block merging
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI 🤖/code-review",
