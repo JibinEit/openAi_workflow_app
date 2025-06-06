@@ -119,11 +119,10 @@ class _MyHomePageState extends State<MyHomePage> {
       floatingActionButton: FloatingActionButton(
         onPressed:(){ _incrementCounter();
          var junk=   SampleClass("Jibin", 25);
-         junk.displayInfo();
+         
 
          int tmp = 0;
-         tmp = 1 + 2; // bad: unnecessary variable assignment
-         print("Sum is: $tmp"); // bad: using print for debugging in production code
+        // bad: using print for debugging in production code
          // bad: using print for debugging in production code
         },    
         tooltip: 'Increment',
