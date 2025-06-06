@@ -1,3 +1,5 @@
+# .github/workflows/jibinbot-review.yml
+
 name: "brandOptics AI – PR Code Review"
 
 on:
@@ -89,12 +91,13 @@ jobs:
               | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
           fi
 
-      # ── 12) RUN FLUTTER ANALYZER (Dart/Flutter) ─────────────────────────
-      - name: Run Flutter Analyzer
+      # ── 12) RUN FLUTTER/DART ANALYZER ─────────────────────────────────
+      - name: Run Dart/Flutter Analyzer
         run: |
-          # Only run if this is a Flutter/Dart project
+          # Only run if this is a Flutter/Dart project (pubspec.yaml exists)
           if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
-            flutter analyze --format=json > .github/linter-reports/dartanalyzer.json || true
+            dart analyze --format=json \
+              > .github/linter-reports/dartanalyzer.json || true
           fi
 
       # ── 13) RUN DOTNET FORMAT (C#/.NET) ────────────────────────────────
