@@ -6,11 +6,10 @@ from pathlib import Path
 
 import openai
 from github import Github
-from openai.error import RateLimitError, OpenAIError
 
 # ── 1) ENVIRONMENT & CLIENT SETUP ───────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-BOT_TOKEN      = os.getenv("GITHUB_TOKEN")  # Should be your machine user's PAT
+BOT_TOKEN      = os.getenv("GITHUB_TOKEN")  # Machine user’s PAT
 REPO_NAME      = os.getenv("GITHUB_REPOSITORY")   # e.g. "username/repo"
 EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")   # path to the PR event JSON
 
@@ -43,6 +42,12 @@ for f in pr.get_files():
 if not changed_files:
     pr.create_issue_comment(
         "👀 JibinBot has nothing to review (no text diffs detected)."
+    )
+    # Mark status success to allow merge
+    repo.get_commit(head_sha).create_status(
+        context="JibinBot/code-review",
+        state="success",
+        description="No issues detected"
     )
     exit(0)
 
@@ -196,7 +201,23 @@ if summary_issues:
     combined = "**🔎 JibinBot found issues that couldn’t be placed inline:**\n\n" + "\n".join(summary_issues)
     pr.create_issue_comment(combined)
 
-# ── 9) OPTIONAL: RUN THE AI REVIEWER FOR HIGH-LEVEL FEEDBACK ────────────
+# ── 9) DISABLE MERGE IF SERIOUS ISSUES ──────────────────────────────────
+# If there is at least one issue, mark a failing status check on the HEAD commit.
+# This will block the merge if branch-protection rules require this status to pass.
+if issues:
+    repo.get_commit(head_sha).create_status(
+        context="JibinBot/code-review",
+        state="failure",
+        description="Serious code issues detected"
+    )
+else:
+    repo.get_commit(head_sha).create_status(
+        context="JibinBot/code-review",
+        state="success",
+        description="No code issues detected"
+    )
+
+# ── 10) OPTIONAL: RUN THE AI REVIEWER FOR HIGH-LEVEL FEEDBACK ────────────
 def build_full_prompt(changed_files, linter_reports):
     instructions = (
         "You are **JibinBot**, an automated code-review assistant. "
@@ -256,13 +277,13 @@ def call_openai_review(prompt: str) -> str:
             max_tokens=2000
         )
         return response.choices[0].message.content.strip()
-    except RateLimitError:
-        return "❌ **JibinBot couldn’t run because your OpenAI quota is exceeded.**\n" \
-               "Please check your OpenAI billing/usage and add more credits."
-    except OpenAIError as e:
+    except Exception as e:
+        error_msg = str(e)
+        if "insufficient_quota" in error_msg or "quota" in error_msg:
+            return "❌ **JibinBot couldn’t run because your OpenAI quota is exceeded.**\nPlease check your OpenAI billing/usage and add more credits."
         return f"❌ **JibinBot encountered an unexpected OpenAI error:** {e}"
 
 ai_feedback = call_openai_review(full_prompt)
 pr.create_issue_comment(f"## 🤖 JibinBot – Automated Code Review\n\n{ai_feedback}")
 
-print(f"✅ JibinBot posted inline comments and AI review on PR #{pr_number}.")
+print(f"✅ JibinBot posted inline comments, set status, and AI review on PR #{pr_number}.")
