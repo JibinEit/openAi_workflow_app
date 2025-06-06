@@ -63,9 +63,18 @@ class _MyHomePageState extends State<MyHomePage> {
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           _incrementCounter();
-          var junk = SampleClass("Jibin", 25);
+        
+          var i;
+          int j;
 
-          int tmp = 0;
+          print()
+
+          var shffhsk= SampleClass(
+            name: 'Sample',
+            age: 25,
+            isActive: true,
+          );
+          print(shffhsk.name);
         },
         tooltip: 'Increment',
         child: const Icon(Icons.add),
