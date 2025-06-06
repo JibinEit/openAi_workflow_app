@@ -13,7 +13,7 @@ REPO_NAME      = os.getenv("GITHUB_REPOSITORY")   # e.g. "username/repo"
 EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")   # path to the PR event JSON
 
 if not OPENAI_API_KEY:
-    print("⛔️ OpenAI API key not found in OPENAI_API_KEY.")
+    print("⛔️ OpenAI API key not found in environment variable OPENAI_API_KEY.")
     exit(1)
 
 openai.api_key = OPENAI_API_KEY
@@ -53,7 +53,6 @@ def load_json_if_exists(path: Path):
                 print(f"⚠️ Failed to parse JSON from {path}: {e}")
                 return None
         else:
-            print(f"⚠️ File {path} is empty.")
             return None
     return None
 
