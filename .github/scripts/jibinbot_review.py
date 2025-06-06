@@ -9,7 +9,7 @@ from github import Github
 
 # ── 1) ENVIRONMENT & CLIENT SETUP ───────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-BOT_TOKEN      = os.getenv("GITHUB_TOKEN")     # Your machine-user PAT
+BOT_TOKEN      = os.getenv("GITHUB_TOKEN")     # Machine user’s PAT
 REPO_NAME      = os.getenv("GITHUB_REPOSITORY") # e.g. "username/repo"
 EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH") # path to the PR event JSON
 
@@ -45,7 +45,6 @@ if not changed_files:
     pr.create_issue_comment(
         "👀 JibinBot has nothing to review (no text diffs detected)."
     )
-    # Mark status success so branch protection (if any) is satisfied.
     repo.get_commit(head_sha).create_status(
         context="JibinBot/code-review",
         state="success",
@@ -88,16 +87,14 @@ def compute_diff_position(patch: str, target_line: int) -> int | None:
 
     for row in patch.splitlines():
         if row.startswith("@@"):
-            # Example: @@ -12,7 +12,8 @@
             m = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", row)
             if m:
-                new_line = int(m.group(1)) - 1  # hunk’s starting new-line minus one
+                new_line = int(m.group(1)) - 1
             continue
 
         if new_line is None:
             continue
 
-        # Lines starting with '+' or ' ' denote new-file content
         if row.startswith("+") or row.startswith(" "):
             new_line += 1
             if new_line == target_line:
@@ -120,7 +117,7 @@ if isinstance(eslint_report, list):
         for msg in file_report.get("messages", []):
             line     = msg.get("line")
             rule     = msg.get("ruleId") or ""
-            text     = msg.get("message")  or ""
+            text     = msg.get("message") or ""
             severity = msg.get("severity", 0)
             sev_text = "Error" if severity == 2 else "Warning"
             full_msg = f"ESLint ({sev_text}): [{rule}] {text}"
@@ -204,34 +201,23 @@ for issue in issues:
     line_num  = issue["line"]
     msg       = issue["message"]
 
-    # Skip if file wasn’t in changed_files
     matching = [c for c in changed_files if c["filename"] == file_path]
     if not matching:
-        summary_issues.append(
-            f"- `{file_path}`:{line_num} → {msg}"
-        )
+        summary_issues.append(f"- `{file_path}`:{line_num} → {msg}")
         continue
 
-    patch     = matching[0]["patch"]
-    position  = compute_diff_position(patch, line_num)
+    patch = matching[0]["patch"]
+    position = compute_diff_position(patch, line_num)
     if position is None:
-        summary_issues.append(
-            f"- `{file_path}`:{line_num} → {msg}"
-        )
+        summary_issues.append(f"- `{file_path}`:{line_num} → {msg}")
         continue
 
     body = f"@{pr_author} ⚠️ {msg}"
     try:
-        pr.create_review_comment(
-            body      = body,
-            commit_id = head_sha,
-            path      = file_path,
-            position  = position
-        )
+        # Use positional arguments: (body, commit_id, path, position)
+        pr.create_review_comment(body, head_sha, file_path, position)
     except Exception as e:
-        summary_issues.append(
-            f"- `{file_path}`:{line_num} → {msg} (inline failed: {e})"
-        )
+        summary_issues.append(f"- `{file_path}`:{line_num} → {msg} (inline failed: {e})")
 
 
 # ── 8) IF ANY ISSUES REMAIN, POST A SUMMARY COMMENT ──────────────────────
@@ -262,16 +248,16 @@ else:
 def build_summary_prompt(changed_files, linter_reports):
     """
     This prompt only asks for a high-level summary. We explicitly tell the model:
-    'Do NOT include line numbers. We will handle inline details via linter data.'
+    'Do NOT include specific line numbers—inline details come from linter data.'
     """
     instructions = (
         "You are **JibinBot**, an automated code-review assistant. "
-        "Your job is to provide a concise, high-level summary of the changes. "
+        "Provide a concise, high-level summary of the changes. "
         "Below you’ll see:\n\n"
         "  • A list of changed files with unified diffs\n"
         "  • JSON outputs from linters: ESLint, Flake8, ShellCheck, Dart Analyzer, and .NET Format\n\n"
         "Focus on overall code quality, design, and potential logical/security issues. "
-        "Do NOT include any specific line numbers—just give a brief paragraph for each file with general observations.\n\n"
+        "Do NOT include specific line numbers—inline details come from linter data.\n\n"
         "Format your response in Markdown, with headings like:\n"
         "  ### File: path/to/file.ext\n"
         "- <Your summary bullet points>\n\n"
@@ -319,17 +305,17 @@ full_prompt = build_summary_prompt(
 def call_openai_review(prompt: str) -> str:
     """
     Use a low-temperature chat completion for a high-level summary.
-    We do not ask for line numbers here.
+    We do not ask for specific line numbers here.
     """
     try:
         response = openai.chat.completions.create(
             model       = "gpt-4o-mini",
             messages    = [
                 {"role": "system", "content": "You are JibinBot, an expert code reviewer."},
-                {"role": "user",   "content": prompt}
+                {"role": "user",   "content": prompt},
             ],
             temperature = 0.2,
-            max_tokens  = 1000
+            max_tokens  = 1000,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -342,7 +328,6 @@ def call_openai_review(prompt: str) -> str:
         return f"❌ **JibinBot encountered an unexpected OpenAI error:** {e}"
 
 
-# Post the high-level summary (no line numbers)
 ai_feedback = call_openai_review(full_prompt)
 pr.create_issue_comment(
     f"## 🤖 JibinBot – High-Level Code Review Summary\n\n{ai_feedback}"
