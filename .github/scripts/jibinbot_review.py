@@ -3,7 +3,7 @@ import os
 import json
 import re
 from pathlib import Path
-from textwrap import wrap
+from textwrap import dedent
 
 import openai
 from github import Github
@@ -27,7 +27,7 @@ with open(EVENT_PATH, "r") as f:
     event = json.load(f)
 
 pr_number = event["pull_request"]["number"]
-full_sha  = event["pull_request"]["head"]["sha"]  # Full commit SHA
+full_sha  = event["pull_request"]["head"]["sha"]
 repo      = gh.get_repo(REPO_NAME)
 pr        = repo.get_pull(pr_number)
 
@@ -154,7 +154,6 @@ if isinstance(shellcheck_report, list):
 
 # Dart Analyzer
 if isinstance(dartanalyzer_report, dict):
-    # NOTE: The JSON has a "diagnostics" array, not "issues"
     for diagnostic in dartanalyzer_report.get("diagnostics", []):
         loc        = diagnostic.get("location", {})
         abs_path   = loc.get("file")
@@ -165,11 +164,14 @@ if isinstance(dartanalyzer_report, dict):
             continue
         range_info = loc.get("range", {}).get("start", {})
         line       = range_info.get("line")
-        text       = diagnostic.get("problemMessage") or diagnostic.get("message") or ""
         code       = diagnostic.get("code") or "DartAnalyzer"
+        text       = diagnostic.get("problemMessage") or diagnostic.get("message") or ""
         severity   = diagnostic.get("severity", "")
-        # Normalize severity text:
-        sev_text = "Error" if severity == "ERROR" else "Warning" if severity == "WARNING" else "Info"
+        sev_text   = (
+            "Error" if severity == "ERROR" else
+            "Warning" if severity == "WARNING" else
+            "Info"
+        )
         if line:
             issues.append({
                 "file":    rel_path,
@@ -199,7 +201,7 @@ if isinstance(dotnet_report, dict):
                 })
 
 
-# ── 7) BUILD SUMMARY WITH SUGGESTIONS ───────────────────────────────────
+# ── 7) BUILD SUMMARY WITH SUGGESTIONS VIA OPENAI ────────────────────────
 def get_original_line(path: str, line_no: int) -> str:
     try:
         with open(path, "r") as f:
@@ -211,28 +213,43 @@ def get_original_line(path: str, line_no: int) -> str:
     return ""
 
 
-def auto_suggest_fix(code: str, original: str) -> str:
+def ai_suggest_fix(code: str, original: str, file_path: str, line_no: int) -> str:
     """
-    Basic suggestions for common lint codes:
-      - E221/E251/E261: collapse multiple spaces to single space
-      - E501: wrap long lines at 79 chars
-      - unused-import / F401: remove the import
-      - unused-variable: comment out or remove
-      - avoid_print: replace print with logger
-    Otherwise, return a placeholder.
+    Call OpenAI to get a corrected version of the 'original' line.
+    We provide the lint code, the offending line, and ask GPT to output
+    just the corrected snippet (1-2 lines max).
     """
-    if code.startswith("E221") or code.startswith("E251") or code.startswith("E261"):
-        return re.sub(r" {2,}", " ", original)
-    if code.startswith("E501"):
-        wrapped = wrap(original, width=79)
-        return "\n".join(wrapped)
-    if code in ("unused-import", "F401"):
-        return f"# Remove unused import:\n# {original}"
-    if code == "unused-variable":
-        return f"# Remove unused variable:\n# {original}"
-    if "print" in original and code.lower().startswith("avoid_print"):
-        return original.replace("print", "logger.info")
-    return f"# Suggestion: {original}"
+    prompt = dedent(f"""
+        You are a Dart/Flutter expert. Below is a single line of Dart code
+        from file `{file_path}`, line {line_no}, which triggers lint/analysis
+        error `{code}`:
+
+        ```dart
+        {original}
+        ```
+
+        Rewrite just that line (or a minimal snippet) to satisfy the lint/diagnostic.
+        Output only the corrected code, with double quotes if it's a string issue,
+        or other minimal fix. Do not add any extra explanation—only the corrected Dart snippet.
+    """).strip()
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful Dart/Flutter assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            max_tokens=60
+        )
+        suggestion = response.choices[0].message.content.strip()
+        # If the AI returns triple-backticks, strip them:
+        suggestion = re.sub(r"^```dart\s*|\s*```$", "", suggestion).strip()
+        return suggestion
+    except Exception as e:
+        # On any API error, fall back to returning the original with a generic note
+        return f"# (AI request failed: {e})\n{original}"
 
 
 # Organize by file → list of issues
@@ -246,23 +263,26 @@ md = ["## 🤖 JibinBot – Code Review Suggestions\n"]
 for file_path, file_issues in file_to_issues.items():
     md.append(f"### File: `{file_path}`\n")
     for issue in sorted(file_issues, key=lambda x: x["line"]):
-        ln        = issue["line"]
-        code      = issue["code"]
-        msg       = issue["message"]
-        original  = get_original_line(file_path, ln)
-        suggested = auto_suggest_fix(code, original)
+        ln       = issue["line"]
+        code     = issue["code"]
+        msg      = issue["message"]
+        original = get_original_line(file_path, ln)
 
         md.append(f"- **Line {ln}**: {msg}\n")
         if original:
             md.append("  ```dart\n")
             md.append(f"  {original}\n")
             md.append("  ```\n")
-        if suggested:
-            md.append("  **Suggested:**\n")
-            md.append("  ```dart\n")
-            for s_line in suggested.split("\n"):
-                md.append(f"  {s_line}\n")
-            md.append("  ```\n")
+
+            # Ask OpenAI for a correction
+            suggested = ai_suggest_fix(code, original, file_path, ln)
+            if suggested:
+                md.append("  **Suggested (via OpenAI):**\n")
+                md.append("  ```dart\n")
+                # Indent multi-line suggestions by two spaces
+                for s_line in suggested.split("\n"):
+                    md.append(f"  {s_line}\n")
+                md.append("  ```\n")
     md.append("\n")
 
 if not issues:
@@ -273,7 +293,7 @@ summary_body = "\n".join(md)
 # Post the summary as a PR comment
 pr.create_issue_comment(summary_body)
 
-# ── 8) DISABLE MERGE IF SERIOUS ISSUES ──────────────────────────────────
+# ── 8) DISABLE MERGE IF SERIOUS ERRORS ─────────────────────────────────
 if issues:
     repo.get_commit(full_sha).create_status(
         context     = "JibinBot/code-review",
