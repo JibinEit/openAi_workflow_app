@@ -1,6 +1,6 @@
 # .github/workflows/jibinbot-review.yml
 
-name: "brandOptics AI – PR Code Review"
+name: "brandOptics AI 🤖 Code Review"
 
 on:
   pull_request:
