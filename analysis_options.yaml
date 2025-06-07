@@ -82,7 +82,7 @@ linter:
     only_throw_errors: true
     overridden_fields: true
     parameter_assignments: true
-    unsafe_html: true
+    # unsafe_html: true
     use_build_context_synchronously: true
     use_function_type_syntax_for_parameters: true
     use_to_and_as_if_applicable: true
