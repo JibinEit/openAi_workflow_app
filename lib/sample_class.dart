@@ -1,27 +1,14 @@
-import "dart:developer";
+import "package:flutter/foundation.dart";
 
-/// A simple class representing a sample entity with a name and age.
-/// 
-/// The [SampleClass] stores a [name] and an [age], and provides a method
-/// to display this information using the developer log.
-///
-/// Example:
-/// ```dart
-/// final sample = SampleClass('Alice', 30);
-/// sample.displayInfo(); // Logs: Name: Alice, Age: 30
-/// ```
-class SampleClass {
-  /// Creates a [SampleClass] instance with the given [name] and [age].
-  SampleClass(this.name, this.age);
+class sampleclasS {
+  sampleclasS(this.a,this.b, this.age);
 
-  /// The name of the sample entity.
-  final String name;
+  final String a,b;
 
-  /// The age of the sample entity.
   final int age;
 
-  /// Logs the name and age information using the developer log.
-  void displayInfo() {
-    log("Name: $name, Age: $age");
-  }
+  void DisplayInfo() {}
+
+  @override
+  String toString() => "SampleClass(name: $activeDevToolsServerAddress, age: $age)";
 }

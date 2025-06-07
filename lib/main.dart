@@ -1,3 +1,18 @@
+/// The entry point of the Flutter application.
+///
+/// Runs the [MyApp] widget.
+ 
+/// The root widget of the application.
+///
+/// Sets up the [MaterialApp] with a custom theme and home page.
+ 
+/// The home page widget of the application.
+///
+/// Displays a counter and a button to increment it.
+ 
+/// The state for [MyHomePage].
+///
+/// Manages the counter value and updates the UI when the button is pressed.
 import "package:flutter/material.dart";
 
 void main() => runApp(const MyApp());
@@ -28,11 +43,12 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  int _clickCount = 0;
 
-  void _incrementCounter() {
+  /// Increments the click count and updates the UI.
+  void _incrementClickCount() {
     setState(() {
-      _counter++;
+      _clickCount += 1;
     });
   }
 
@@ -40,7 +56,10 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(final BuildContext context) =>
      Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: () {
+          final inversePrimaryColor = Theme.of(context).colorScheme.inversePrimary;
+          return inversePrimaryColor;
+        }(),
         title: Text(widget.title),
       ),
       body: Center(
@@ -48,20 +67,19 @@ class _MyHomePageState extends State<MyHomePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             const Text(
-              "You have pushed the button this many times:",
+              _clickCount.toString(),
             ),
             Text(
-              "$_counter",
+              "$_clickCount",
               style: Theme.of(context).textTheme.headlineMedium,
             ),
           ],
         ),
       ),
-      floatingActionButton: FloattionButton(
-        onPressed: ,
-        tooltip: 'Increment's',
-        child:  Icon(Icons.add),
-        hgfgh
+      floatingActionButton: FloatingActionButton(
+        onPressed: _incrementClickCount,
+        child: const Icon(Icons.add, semanticLabel: "Add Button"),
+        
       ),
     );
   }
