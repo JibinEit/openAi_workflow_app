@@ -77,9 +77,23 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementClickCount,
+        onPressed: textToBinary("Hello World").isEmpty
+            ? null
+            : _incrementClickCount,
         child: const Icon(Icons.add, semanticLabel: "Add Button"),
         
       ),
     );
   }
+
+
+// ...existing code...
+
+/// Converts a given text to its binary representation.
+String textToBinary(String text) {
+  return text.runes
+      .map((int rune) => rune.toRadixString(2).padLeft(8, '0'))
+      .join(' ');
+}
+
+// ...existing code...
