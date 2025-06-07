@@ -2,6 +2,7 @@
 import os
 import json
 import subprocess
+import html
 from pathlib import Path
 from textwrap import dedent
 
@@ -91,17 +92,15 @@ reports = {
     'dotnet':     load_json(rdir/'dotnet-format.json')or {}
 }
 
-# Gather issues from lint reports
+# Gather issues
 def gather_issues(pr):
     issues = []
     changed = set(changed_files(pr))
-
-    # ESLint & ShellCheck
-    for key in ('eslint', 'shellcheck'):
+    # eslint & shellcheck
+    for key in ('eslint','shellcheck'):
         for rpt in reports[key]:
-            rel = os.path.relpath(
-                rpt.get('filePath' if key=='eslint' else 'file', '')
-            )
+            path_key = 'filePath' if key=='eslint' else 'file'
+            rel = os.path.relpath(rpt.get(path_key,''))
             if rel in changed:
                 msgs = rpt.get('messages') if key=='eslint' else [rpt]
                 for m in msgs:
@@ -111,8 +110,7 @@ def gather_issues(pr):
                         'code':    m.get('ruleId', m.get('code', key)),
                         'message': m.get('message')
                     })
-
-    # Flake8
+    # flake8
     for path, errs in reports['flake8'].items():
         rel = os.path.relpath(path)
         if rel in changed:
@@ -123,22 +121,20 @@ def gather_issues(pr):
                     'code':    e.get('code'),
                     'message': e.get('text')
                 })
-
-    # Dart analyzer
+    # dart analyzer
     for d in reports['dart'].get('diagnostics', []):
-        loc = d.get('location', {})
-        rel = os.path.relpath(loc.get('file', ''))
+        loc = d.get('location',{})
+        rel = os.path.relpath(loc.get('file',''))
         if rel in changed:
             issues.append({
                 'file':    rel,
-                'line':    loc.get('range', {}).get('start', {}).get('line'),
+                'line':    loc.get('range',{}).get('start',{}).get('line'),
                 'code':    d.get('code'),
                 'message': d.get('problemMessage') or d.get('message')
             })
-
-    # .NET format
+    # dotnet
     for d in reports['dotnet'].get('Diagnostics', []):
-        rel = os.path.relpath(d.get('Path', ''))
+        rel = os.path.relpath(d.get('Path',''))
         if rel in changed:
             issues.append({
                 'file':    rel,
@@ -146,34 +142,35 @@ def gather_issues(pr):
                 'code':    'DotNet',
                 'message': d.get('Message')
             })
-
     return issues
 
-issues      = gather_issues(pr)
-ref_blocks  = extract_diff(pr, defaults['BASE_REF'], sha)
+issues     = gather_issues(pr)
+ref_blocks = extract_diff(pr, defaults['BASE_REF'], sha)
 
-# Build the markdown comment
-md = ["## 🚀 brandOptics AI Code Review",
-      "",
-      "### 📑 Index of Contents"]
+# Build markdown
+md = ["## 🚀 brandOptics AI Code Review", "", "### 📑 Index of Contents"]
 if issues:
     md.append("- [Issues Summary](#issues)")
 if ref_blocks:
     md.append("- [Refactoring Suggestions](#refactoring)")
 
-# Issues table
+# Issues Table
 if issues:
     md.extend([
-        "", "---", "<a name='issues'></a>", "## 🚨 Issues Summary", "",
+        "",
+        "---",
+        "<a name='issues'></a>",
+        "## 🚨 Issues Summary",
+        "",
         "| File | Line | Rule | Original | Fix |",
-        "|:-----|:----:|:-----|:---------|:----|"
+        "|:-----|:----:|:-----|:--------|:----|"
     ])
     for i in issues:
-        orig = read_line(i['file'], i['line'])
-        sug = call_ai(
+        orig = read_line(i['file'], i['line']).replace("|","\\|").strip()
+        fix  = call_ai(
             [
-                {"role": "system", "content": "You are a Dart/Flutter expert. Output only the corrected code line to fix the lint error; no explanation."},
-                {"role": "user",   "content": dedent(f"""
+                {"role":"system","content":"You are a Dart/Flutter expert. Output only the corrected code line to fix the lint error; no explanation."},
+                {"role":"user","content":dedent(f"""
 Fix lint error `{i['code']}` in `{i['file']}`, line {i['line']}. Rewrite only the offending line:
 ```dart
 {orig}
@@ -182,30 +179,28 @@ Fix lint error `{i['code']}` in `{i['file']}`, line {i['line']}. Rewrite only th
                 )}
             ],
             max_tokens=60
-        )
-        md.append(
-            f"| {i['file']} | {i['line']} | `{i['code']}` | `{orig}` | `{sug}` |"
-        )
+        ).strip().replace("`","\\`")
+        md.append(f"| {i['file']} | {i['line']} | `{i['code']}` | `{orig}` | `{fix}` |")
 else:
+    md.extend(["", "---", "🎉 **No lint or analysis issues detected!**"])
+
+# Refactoring Table
+if ref_blocks:
     md.extend([
         "",
         "---",
-        "🎉 **No lint or analysis issues detected!**"
-    ])
-
-# Refactoring table
-if ref_blocks:
-    md.extend([
-        "", "---", "<a name='refactoring'></a>", "## 💡 Professional Refactoring Suggestions", "",
-        "| File | Refactored Snippet |",
-        "|:-----|:-------------------|"
+        "<a name='refactoring'></a>",
+        "## 💡 Professional Refactoring Suggestions",
+        "",
+        "| File | Refactored Code |",
+        "|:-----|:----------------|"
     ])
     for b in ref_blocks:
-        ref = call_ai(
+        ref_code = call_ai(
             [
-                {"role": "system", "content": "You are a senior software engineer. Output only the refactored code snippet; no explanation."},
-                {"role": "user",   "content": dedent(f"""
-Refactor this snippet in `{b['file']}`. Provide only the refactored code, no explanation:
+                {"role":"system","content":"You are a senior software engineer. Output only the refactored code snippet; no explanation."},
+                {"role":"user","content":dedent(f"""
+Refactor this snippet in `{b['file']}`. Provide only the refactored code:
 ```dart
 {b['code']}
 ```
@@ -213,10 +208,11 @@ Refactor this snippet in `{b['file']}`. Provide only the refactored code, no exp
                 )}
             ],
             max_tokens=200, temperature=0.2
-        )
-        md.append(f"| {b['file']} | ```dart\n{ref}\n``` |")
+        ).strip()
+        escaped = html.escape(ref_code)
+        md.append(f"| {b['file']} | <pre><code>{escaped}</code></pre> |")
 
-# Post the comment and set status
+# Post
 comment = "\n".join(md)
 pr.create_issue_comment(comment)
 repo.get_commit(sha).create_status(
@@ -224,5 +220,4 @@ repo.get_commit(sha).create_status(
     state='failure' if issues else 'success',
     description="Review complete."
 )
-
 print(f"Posted PR review #{pr.number} 📌")
