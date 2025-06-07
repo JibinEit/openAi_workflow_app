@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run brandOptics AI review
-        uses: brandoptics/brandOptics_ai_review_bot_action@v1.2.0
+        uses: brandoptics/brandOptics_ai_review_bot_action@v1.3.0
         with:
-          openai_key:   ${{ secrets.OPENAI_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        openai_key:   ${{ secrets.OPENAI_KEY }}
+        github_token: ${{ secrets.GITHUB_TOKEN }}
