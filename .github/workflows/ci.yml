@@ -15,4 +15,5 @@ jobs:
       - name: Run brandOptics AI review
         uses: brandoptics/brandOptics_ai_review_bot_action@v1.1.0
         with:
-          openai_key: ${{ secrets.OPENAI_KEY }}
+          openai_key:   ${{ secrets.OPENAI_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
