@@ -1,8 +1,9 @@
-name: "brandOptics AI Code Review - Global Model"
+name: "brandOptics AI Code Review"
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+
 permissions:
   contents: read
   pull-requests: write
@@ -12,8 +13,13 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
+      # 1) Always checkout first
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2) Invoke your composite Action
       - name: Run brandOptics AI review
         uses: brandoptics/brandOptics_ai_review_bot_action@v1.3.0
         with:
-        openai_key:   ${{ secrets.OPENAI_KEY }}
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+          openai_key:   ${{ secrets.OPENAI_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
