@@ -9,163 +9,168 @@ import openai
 from github import Github
 
 # Configuration
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
-REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
-EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
-BASE_REF       = os.getenv("GITHUB_BASE_REF")  # e.g., 'main'
-DEFAULT_MODEL  = os.getenv("OPENAI_MODEL", "gpt-4o")
+defaults = dict(
+    OPENAI_API_KEY=os.getenv("OPENAI_API_KEY"),
+    GITHUB_TOKEN=os.getenv("GITHUB_TOKEN"),
+    REPO_NAME=os.getenv("GITHUB_REPOSITORY"),
+    EVENT_PATH=os.getenv("GITHUB_EVENT_PATH"),
+    BASE_REF=os.getenv("GITHUB_BASE_REF"),
+    DEFAULT_MODEL=os.getenv("OPENAI_MODEL", "gpt-4o")
+)
+if not all(defaults.values()):
+    raise EnvironmentError("Missing required environment variables.")
+openai.api_key = defaults['OPENAI_API_KEY']
+gh = Github(defaults['GITHUB_TOKEN'])
 
-# Initialization
-if not all([OPENAI_API_KEY, GITHUB_TOKEN, REPO_NAME, EVENT_PATH, BASE_REF]):
-    raise EnvironmentError(
-        "Required env vars: OPENAI_API_KEY, GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_EVENT_PATH, GITHUB_BASE_REF"
-    )
-openai.api_key = OPENAI_API_KEY
-gh = Github(GITHUB_TOKEN)
+# Load GitHub event and PR context
+def load_event(path):
+    with open(path) as f: return json.load(f)
 
-# Load event
-def load_event():
-    with open(EVENT_PATH) as f:
-        return json.load(f)
-
-event     = load_event()
-pr_number = event['pull_request']['number']
-sha        = event['pull_request']['head']['sha']
-repo       = gh.get_repo(REPO_NAME)
-pr         = repo.get_pull(pr_number)
+event = load_event(defaults['EVENT_PATH'])
+pr = gh.get_repo(defaults['REPO_NAME']).get_pull(event['pull_request']['number'])
+sha = event['pull_request']['head']['sha']
 
 # Helpers
-
-def load_json(path: Path):
-    if path.is_file() and path.stat().st_size:
-        try:
+def load_json(path):
+    try:
+        if path.is_file() and path.stat().st_size:
             return json.loads(path.read_text())
-        except json.JSONDecodeError:
-            print(f"⚠️ Could not parse JSON at {path}")
+    except json.JSONDecodeError:
+        print(f"⚠️ JSON parse error: {path}")
     return None
 
-
-def get_changed_files():
+def get_changed_files(pr):
     return [f.filename for f in pr.get_files() if f.patch]
 
-
-def read_line(filepath: str, lineno: int) -> str:
+def read_line(file, line):
     try:
-        return Path(filepath).read_text().splitlines()[lineno - 1]
-    except Exception:
+        return Path(file).read_text().splitlines()[line-1]
+    except:
         return ""
 
-
-def call_openai(messages, max_tokens=200, temperature=0.0):
-    res = openai.chat.completions.create(
-        model=DEFAULT_MODEL,
+def call_ai(messages, **kwargs):
+    resp = openai.chat.completions.create(
+        model=defaults['DEFAULT_MODEL'],
         messages=messages,
-        max_tokens=max_tokens,
-        temperature=temperature
+        **kwargs
     )
-    return res.choices[0].message.content.strip()
+    return resp.choices[0].message.content.strip()
 
-
-def extract_diff_blocks(files, base_ref, head_sha):
-    blocks = []
-    for file in files:
-        diff = subprocess.run(
-            ['git', 'diff', f'origin/{base_ref}', head_sha, '--', file],
-            capture_output=True, text=True
-        ).stdout
-        current = []
-        for line in diff.splitlines():
-            if line.startswith('+') and not line.startswith('+++'):
-                current.append(line[1:])
-            elif current:
-                blocks.append({'file': file, 'code': '\n'.join(current)})
-                current = []
-        if current:
-            blocks.append({'file': file, 'code': '\n'.join(current)})
+def extract_diff(pr, base_ref, sha):
+    blocks=[]
+    for f in get_changed_files(pr):
+        diff = subprocess.run(['git','diff',f'origin/{base_ref}',sha,'--',f],capture_output=True,text=True).stdout
+        cur=[]
+        for l in diff.splitlines():
+            if l.startswith('+') and not l.startswith('+++'):
+                cur.append(l[1:])
+            elif cur:
+                blocks.append({'file':f,'code':'\n'.join(cur)});cur=[]
+        if cur: blocks.append({'file':f,'code':'\n'.join(cur)})
     return blocks
 
 # Load linter reports
-reports_dir = Path('.github/linter-reports')
-reports = {
-    'eslint':     load_json(reports_dir / 'eslint.json') or [],
-    'flake8':     load_json(reports_dir / 'flake8.json') or {},
-    'shellcheck': load_json(reports_dir / 'shellcheck.json') or [],
-    'dart':       load_json(reports_dir / 'dartanalyzer.json') or {},
-    'dotnet':     load_json(reports_dir / 'dotnet-format.json') or {}
-}
+rdir=Path('.github/linter-reports')
+reports={k: load_json(rdir/f'{k}.json') or [] for k in ['eslint','shellcheck']}
+reports['flake8']=load_json(rdir/'flake8.json') or {}
+reports['dart']=load_json(rdir/'dartanalyzer.json') or {}
+reports['dotnet']=load_json(rdir/'dotnet-format.json') or {}
 
 # Collect issues
-issues = []
-changed_files = set(get_changed_files())
-for rpt in reports['eslint']:
-    rel = os.path.relpath(rpt.get('filePath', ''), start=os.getcwd())
-    if rel in changed_files:
-        for msg in rpt.get('messages', []):
-            issues.append({'file': rel, 'line': msg.get('line'), 'code': msg.get('ruleId') or 'ESLint', 'message': msg.get('message')})
-for path, errs in reports['flake8'].items():
-    rel = os.path.relpath(path, start=os.getcwd())
-    if rel in changed_files:
-        for e in errs:
-            issues.append({'file': rel, 'line': e.get('line_number') or e.get('line'), 'code': e.get('code'), 'message': e.get('text')})
-for entry in reports['shellcheck']:
-    rel = os.path.relpath(entry.get('file', ''), start=os.getcwd())
-    if rel in changed_files:
-        issues.append({'file': rel, 'line': entry.get('line'), 'code': entry.get('code'), 'message': entry.get('message')})
-for d in reports['dart'].get('diagnostics', []):
-    loc = d.get('location', {})
-    rel = os.path.relpath(loc.get('file', ''), start=os.getcwd())
-    if rel in changed_files:
-        issues.append({'file': rel, 'line': loc.get('range', {}).get('start', {}).get('line'), 'code': d.get('code') or 'DartAnalyzer', 'message': d.get('problemMessage') or d.get('message')})
-for d in reports['dotnet'].get('Diagnostics', []):
-    rel = os.path.relpath(d.get('Path', ''), start=os.getcwd())
-    if rel in changed_files:
-        issues.append({'file': rel, 'line': d['Region']['StartLine'], 'code': 'DotNet', 'message': d.get('Message')})
+def gather_issues(pr):
+    issues=[]
+    changed=set(get_changed_files(pr))
+    # ESLint & ShellCheck
+    for key in ['eslint','shellcheck']:
+        for rpt in reports[key]:
+            rel=os.path.relpath(rpt.get('filePath' if key=='eslint' else 'file',''))
+            if rel in changed:
+                msgs=rpt.get('messages') if key=='eslint' else [rpt]
+                for m in msgs:
+                    issues.append({'file':rel,'line':m.get('line'),'code':m.get('ruleId',m.get('code',key)),'message':m.get('message')})
+    # Flake8
+    for path,errs in reports['flake8'].items():
+        rel=os.path.relpath(path)
+        if rel in changed:
+            for e in errs:
+                issues.append({'file':rel,'line':e.get('line_number'),'code':e.get('code'),'message':e.get('text')})
+    # Dart
+    for d in reports['dart'].get('diagnostics',[]):
+        loc=d.get('location',{});rel=os.path.relpath(loc.get('file',''))
+        if rel in changed:
+            issues.append({'file':rel,'line':loc.get('range',{}).get('start',{}).get('line'),'code':d.get('code'),'message':d.get('problemMessage') or d.get('message')})
+    # DotNet
+    for d in reports['dotnet'].get('Diagnostics',[]):
+        rel=os.path.relpath(d.get('Path',''))
+        if rel in changed:
+            issues.append({'file':rel,'line':d['Region']['StartLine'],'code':'DotNet','message':d.get('Message')})
+    return issues
 
-# Build comment
-comment_lines = ["## 🚀 brandOptics AI Code Review"]
+issues=gather_issues(pr)
+ref_blocks=extract_diff(pr,defaults['BASE_REF'],sha)
+
+# Build markdown comment
+md=[f"## 🚀 brandOptics AI Code Review"]
+# Index
+md.append("\n### 📑 Index")
 if issues:
-    uniques = {i['file'] for i in issues}
-    comment_lines.append(f"Found **{len(issues)}** issue(s) across **{len(uniques)}** file(s):")
-    for i in issues:
-        orig = read_line(i['file'], i['line'])
-        suggestion = call_openai([
-            {'role':'system','content':'You are a Dart/Flutter expert.'},
-            {'role':'user','content':dedent(f"""
-Fix {i['code']} in `{i['file']}:{i['line']}`:
+    files=set(i['file'] for i in issues)
+    md.append("- **Issues by File:**")
+    for f in sorted(files): md.append(f"  - [{f}](#issue-{f.replace('/','')})")
+if ref_blocks:
+    files_r=set(b['file'] for b in ref_blocks)
+    md.append("- **Refactor Suggestions:**")
+    for f in sorted(files_r): md.append(f"  - [{f}](#refactor-{f.replace('/','')})")
+
+# Issue Details
+if issues:
+    md.append("\n---\n## 🚨 Issues")
+    grp={}
+    for i in issues: grp.setdefault(i['file'],[]).append(i)
+    for f,its in grp.items():
+        anchor=f"issue-{f.replace('/','')}"
+        md.append(f"<a name=\"{anchor}\"></a>\n### File: `{f}`")
+        md.append("| Line | Code | Message | Suggestion |")
+        md.append("|:----:|:-----|:--------|:-----------|")
+        for i in its:
+            orig=read_line(i['file'],i['line'])
+            sug=call_ai([
+                {'role':'system','content':'You are a Dart/Flutter expert.'},
+                {'role':'user','content':dedent(f"""
+Fix {i['code']} at {f}:{i['line']}:
 ```dart
 {orig}
 ```
 """ )}
-        ], max_tokens=60)
-        comment_lines.append(f"- `{i['file']}:{i['line']}` **{i['code']}**: {i['message']}\n  Suggestion: `{suggestion}`")
-else:
-    comment_lines.append("🎉 No lint or analysis issues detected!")
+            ],max_tokens=60)
+            md.append(f"| {i['line']} | `{i['code']}` | {i['message']} | `{sug}` |")
 
-# Refactoring suggestions
-new_blocks = extract_diff_blocks(list(changed_files), BASE_REF, sha)
-if new_blocks:
-    comment_lines.append("\n## 💡 Refactoring Suggestions")
-    for blk in new_blocks:
-        ref = call_openai([
-            {'role':'system','content':'You are a senior software engineer.'},
-            {'role':'user','content':dedent(f"""
-Refactor this snippet in `{blk['file']}`:
+# Refactor Details
+if ref_blocks:
+    md.append("\n---\n## 💡 Professional Refactoring")
+    for f in sorted(set(b['file'] for b in ref_blocks)):
+        anchor=f"refactor-{f.replace('/','')}"
+        md.append(f"<a name=\"{anchor}\"></a>\n### File: `{f}`")
+        for b in [blk for blk in ref_blocks if blk['file']==f]:
+            ref=call_ai([
+                {'role':'system','content':'You are a senior software engineer.'},
+                {'role':'user','content':dedent(f"""
+Refactor this snippet:
 ```
-{blk['code']}
+{b['code']}
 ```
 """ )}
-        ], max_tokens=200, temperature=0.2)
-        comment_lines.append(f"### {blk['file']}")
-        comment_lines.append("```dart")
-        comment_lines.append(ref)
-        comment_lines.append("```")
+            ],max_tokens=200,temperature=0.2)
+            md.append("```dart")
+            md.append(ref)
+            md.append("```")
 
-# Post comment and status
-pr.create_issue_comment("\n".join(comment_lines))
-repo.get_commit(sha).create_status(
+# Post
+comment="\n".join(md)
+pr.create_issue_comment(comment)
+pr.get_repo().get_commit(sha).create_status(
     context="brandOptics AI code-review",
     state='failure' if issues else 'success',
-    description="Review complete. Check suggestions above."
+    description="Review complete."
 )
-print(f"Posted review for PR #{pr_number} 📌")
+print(f"Posted PR review #{pr.number}")
