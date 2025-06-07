@@ -164,3 +164,4 @@ linter:
     unnecessary_this: true
     unnecessary_to_list_in_spreads: true
     unrelated_type_equality_checks: true
+    

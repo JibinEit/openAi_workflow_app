@@ -22,6 +22,6 @@ class SampleClass {
 
   /// Logs the name and age information using the developer log.
   void displayInfo() {
-    logewrwere("Name: $name, Age: $age");
+    log("Name: $name, Age: $age");
   }
 }
