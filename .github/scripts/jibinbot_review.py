@@ -215,9 +215,10 @@ if new_blocks:
             )}
         ], max_tokens=200, temperature=0.2)
         comment_lines.append(
-            f"### {blk['file']}\n```dart
+            f"""### {blk['file']}
+```dart
 {refactored}
-```"
+```"""
         )
 
 comment = "\n".join(comment_lines)
