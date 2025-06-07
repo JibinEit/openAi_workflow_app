@@ -46,11 +46,11 @@ pr         = repo.get_pull(pr_number)
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 def load_json(path: Path):
-    if path.is_file() and path.stat().st_size:
-        try:
+    try:
+        if path.is_file() and path.stat().st_size:
             return json.loads(path.read_text())
-        except json.JSONDecodeError:
-            print(f"⚠️ Could not parse JSON at {path}")
+    except json.JSONDecodeError:
+        print(f"⚠️ Could not parse JSON at {path}")
     return None
 
 
@@ -66,29 +66,30 @@ def read_line(filepath: str, lineno: int) -> str:
 
 
 def call_openai(messages, max_tokens=200, temperature=0.0):
-    return openai.ChatCompletion.create(
+    response = openai.chat.completions.create(
         model=DEFAULT_MODEL,
         messages=messages,
         max_tokens=max_tokens,
         temperature=temperature
-    ).choices[0].message.content.strip()
+    )
+    return response.choices[0].message.content.strip()
 
 
 def extract_diff_blocks(files, base_ref, head_sha):
     blocks = []
     for file in files:
-        diff = subprocess.run(
+        result = subprocess.run(
             ['git', 'diff', f'origin/{base_ref}', head_sha, '--', file],
             capture_output=True, text=True
-        ).stdout
+        )
+        diff = result.stdout
         current = []
         for line in diff.splitlines():
             if line.startswith('+') and not line.startswith('+++'):
                 current.append(line[1:])
-            else:
-                if current:
-                    blocks.append({'file': file, 'code': '\n'.join(current)})
-                    current = []
+            elif current:
+                blocks.append({'file': file, 'code': '\n'.join(current)})
+                current = []
         if current:
             blocks.append({'file': file, 'code': '\n'.join(current)})
     return blocks
@@ -174,32 +175,31 @@ for d in reports['dotnet'].get('Diagnostics', []):
         })
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Build review comment
+# Build and post review comment
 # ─────────────────────────────────────────────────────────────────────────────
 comment_lines = ["## 🚀 brandOptics AI Code Review"]
 if issues:
-    comment_lines.append(
-        f"Found **{len(issues)}** issue(s) in **{len({i['file'] for i in issues})}** files:"
-    )
+    unique_files = {i['file'] for i in issues}
+    comment_lines.append(f"Found **{len(issues)}** issue(s) across **{len(unique_files)}** file(s):")
     for i in issues:
         orig_code = read_line(i['file'], i['line'])
         suggestion = call_openai([
             {'role': 'system', 'content': 'You are a Dart/Flutter expert.'},
             {'role': 'user', 'content': dedent(f"""
-                Fix {i['code']} in `{i['file']}:{i['line']}`:
-                ```dart
-                {orig_code}
-                ```
-            """
+Fix {i['code']} in `{i['file']}:{i['line']}`:
+```dart
+{orig_code}
+```
+"""
             )}
         ], max_tokens=60)
         comment_lines.append(
-            f"- `{i['file']}:{i['line']}` **{i['code']}**: {i['message']}\n  ➜ Suggestion: `{suggestion}`"
+            f"- `{i['file']}:{i['line']}` **{i['code']}**: {i['message']}\n  Suggestion: `{suggestion}`"
         )
 else:
     comment_lines.append("🎉 No lint or analysis issues detected!")
 
-# Refactor new code blocks
+# Refactoring suggestions
 new_blocks = extract_diff_blocks(list(changed_files), BASE_REF, sha)
 if new_blocks:
     comment_lines.append("\n## 💡 Refactoring Suggestions")
@@ -207,18 +207,17 @@ if new_blocks:
         refactored = call_openai([
             {'role': 'system', 'content': 'You are a senior software engineer.'},
             {'role': 'user', 'content': dedent(f"""
-                Refactor this snippet in `{blk['file']}`:
-                ```
-                {blk['code']}
-                ```
-            """
+Refactor this snippet in `{blk['file']}`:
+```
+{blk['code']}
+```
+"""
             )}
         ], max_tokens=200, temperature=0.2)
         comment_lines.append(
-            f"""### {blk['file']}
-```dart
+            f"### {blk['file']}\n```dart
 {refactored}
-```"""
+```"
         )
 
 comment = "\n".join(comment_lines)
@@ -227,10 +226,9 @@ pr.create_issue_comment(comment)
 # ─────────────────────────────────────────────────────────────────────────────
 # Set GitHub status
 # ─────────────────────────────────────────────────────────────────────────────
-status = 'failure' if issues else 'success'
 repo.get_commit(sha).create_status(
     context="brandOptics AI code-review",
-    state=status,
+    state='failure' if issues else 'success',
     description="Review complete. Check suggestions above."
 )
 
