@@ -164,29 +164,28 @@ if ref_blocks:
 # Issues table
 if issues:
     md.extend([
-        "",
-        "---",
-        "<a name='issues'></a>",
-        "## 🚨 Issues Summary",
-        "",
-        "| File | Line | Code | Message | Suggestion |",
-        "|:-----|:----:|:-----|:--------|:-----------|"
+        "", "---", "<a name='issues'></a>", "## 🚨 Issues Summary", "",
+        "| File | Line | Rule | Original | Fix |",
+        "|:-----|:----:|:-----|:---------|:----|"
     ])
     for i in issues:
         orig = read_line(i['file'], i['line'])
-        sug  = call_ai(
+        sug = call_ai(
             [
-                {'role':'system', 'content':'You are a Dart/Flutter expert.'},
-                {'role':'user',   'content': dedent(f"""
-                    Fix {i['code']} at {i['file']}:{i['line']}:
-                    ```dart
-                    {orig}
-                    ```
-                """)}
+                {"role": "system", "content": "You are a Dart/Flutter expert. Output only the corrected code line to fix the lint error; no explanation."},
+                {"role": "user",   "content": dedent(f"""
+Fix lint error `{i['code']}` in `{i['file']}`, line {i['line']}. Rewrite only the offending line:
+```dart
+{orig}
+```
+"""
+                )}
             ],
             max_tokens=60
         )
-        md.append(f"| {i['file']} | {i['line']} | `{i['code']}` | {i['message']} | `{sug}` |")
+        md.append(
+            f"| {i['file']} | {i['line']} | `{i['code']}` | `{orig}` | `{sug}` |"
+        )
 else:
     md.extend([
         "",
@@ -197,31 +196,25 @@ else:
 # Refactoring table
 if ref_blocks:
     md.extend([
-        "",
-        "---",
-        "<a name='refactoring'></a>",
-        "## 💡 Professional Refactoring Suggestions",
-        "",
-        "| File | Original Snippet | Refactored Snippet |",
-        "|:-----|:----------------|:-------------------|"
+        "", "---", "<a name='refactoring'></a>", "## 💡 Professional Refactoring Suggestions", "",
+        "| File | Refactored Snippet |",
+        "|:-----|:-------------------|"
     ])
     for b in ref_blocks:
-        ref    = call_ai(
+        ref = call_ai(
             [
-                {'role':'system', 'content':'You are a senior software engineer.'},
-                {'role':'user',   'content': dedent(f"""
-                    Refactor this snippet in `{b['file']}`:
-                    ```
-                    {b['code']}
-                    ```
-                """)}
+                {"role": "system", "content": "You are a senior software engineer. Output only the refactored code snippet; no explanation."},
+                {"role": "user",   "content": dedent(f"""
+Refactor this snippet in `{b['file']}`. Provide only the refactored code, no explanation:
+```dart
+{b['code']}
+```
+"""
+                )}
             ],
             max_tokens=200, temperature=0.2
         )
-        snippet = b['code'].replace('|', '\\|')
-        # escape backticks in the refactored code
-        escaped_ref = ref.replace('`', '\\`')
-        md.append(f"| {b['file']} | `{snippet}` | `{escaped_ref}` |")
+        md.append(f"| {b['file']} | ```dart\n{ref}\n``` |")
 
 # Post the comment and set status
 comment = "\n".join(md)
