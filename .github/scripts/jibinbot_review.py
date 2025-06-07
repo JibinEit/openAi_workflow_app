@@ -1,223 +1,314 @@
 #!/usr/bin/env python3
 import os
 import json
+import re
 import subprocess
-import html
 from pathlib import Path
 from textwrap import dedent
 
 import openai
 from github import Github
 
-# Configuration
-defaults = dict(
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY"),
-    GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN"),
-    REPO_NAME      = os.getenv("GITHUB_REPOSITORY"),
-    EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH"),
-    BASE_REF       = os.getenv("GITHUB_BASE_REF"),  # e.g. 'main'
-    DEFAULT_MODEL  = os.getenv("OPENAI_MODEL", "gpt-4o")
-)
-if not all(defaults.values()):
-    raise EnvironmentError("Missing required environment variables.")
-openai.api_key = defaults['OPENAI_API_KEY']
-gh = Github(defaults['GITHUB_TOKEN'])
+# ── 1) ENVIRONMENT & CLIENT SETUP ───────────────────────────────────────
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+AI_TOKEN      = os.getenv("GITHUB_TOKEN")
+REPO_NAME     = os.getenv("GITHUB_REPOSITORY")
+EVENT_PATH    = os.getenv("GITHUB_EVENT_PATH")
 
-# Load PR context
-def load_event(path):
-    with open(path) as f:
-        return json.load(f)
+if not OPENAI_API_KEY or not AI_TOKEN:
+    print("⛔️ Missing either OPENAI_API_KEY or GITHUB_TOKEN.")
+    exit(1)
 
-event = load_event(defaults['EVENT_PATH'])
-repo  = gh.get_repo(defaults['REPO_NAME'])
-pr    = repo.get_pull(event['pull_request']['number'])
-sha   = event['pull_request']['head']['sha']
+openai.api_key = OPENAI_API_KEY
+gh = Github(AI_TOKEN)
 
-# Helpers
-def load_json(path: Path):
-    try:
-        if path.is_file() and path.stat().st_size:
-            return json.loads(path.read_text())
-    except json.JSONDecodeError:
-        print(f"⚠️ JSON parse error: {path}")
+# ── 2) READ THE PULL REQUEST PAYLOAD ────────────────────────────────────
+with open(EVENT_PATH, "r") as f:
+    event = json.load(f)
+
+pr_number = event["pull_request"]["number"]
+full_sha  = event["pull_request"]["head"]["sha"]
+repo      = gh.get_repo(REPO_NAME)
+pr        = repo.get_pull(pr_number)
+
+# ── 3) GATHER CHANGED FILES → if no changes, exit early ─────────────────
+changed_files = [f.filename for f in pr.get_files() if f.patch]
+if not changed_files:
+    pr.create_issue_comment(
+        "🤖 brandOptics AI Neural Intelligence Review:\n"
+        "> Thank you for your contribution! I’ve examined the changes and found no textual updates requiring attention. Your submission is polished and ready for merge! 🎉"
+    )
+    repo.get_commit(full_sha).create_status(
+        context="brandOptics AI code-review",
+        state="success",
+        description="✅ No text changes detected. All clear for merge."
+    )
+    exit(0)
+
+# ── 4) LOAD LINTER/ANALYZER JSONS ──────────────────────────────────────
+def load_json_if_exists(path: Path):
+    if path.exists():
+        text = path.read_text().strip()
+        if text:
+            try:
+                return json.loads(text)
+            except Exception as e:
+                print(f"⚠️ Failed to parse JSON from {path}: {e}")
     return None
 
-def changed_files(pr):
-    # exclude any files under .github/
-    return [
-        f.filename
-        for f in pr.get_files()
-        if f.patch and not f.filename.startswith('.github/')
-    ]
+reports_dir          = Path(".github/linter-reports")
+eslint_report        = load_json_if_exists(reports_dir / "eslint.json") or []
+flake8_report        = load_json_if_exists(reports_dir / "flake8.json") or {}
+shellcheck_report    = load_json_if_exists(reports_dir / "shellcheck.json") or []
+dartanalyzer_report  = load_json_if_exists(reports_dir / "dartanalyzer.json") or {}
+dotnet_report        = load_json_if_exists(reports_dir / "dotnet-format.json") or {}
 
-def read_line(file: str, line: int) -> str:
+# ── 5) HELPER TO READ A SPECIFIC LINE FROM DISK ────────────────────────
+def get_original_line(path: str, line_no: int) -> str:
     try:
-        return Path(file).read_text().splitlines()[line - 1]
+        with open(path, "r") as f:
+            lines = f.readlines()
+            if 1 <= line_no <= len(lines):
+                return lines[line_no - 1].rstrip("\n")
     except Exception:
-        return ""
+        pass
+    return ""
 
-def call_ai(messages, **kwargs):
-    resp = openai.chat.completions.create(
-        model=defaults['DEFAULT_MODEL'],
-        messages=messages,
-        **kwargs
-    )
-    return resp.choices[0].message.content.strip()
+# ── 6) CALL OPENAI FOR A “BETTER” SUGGESTION ────────────────────────────
+def ai_suggest_fix(code: str, original: str, file_path: str, line_no: int) -> str:
+    prompt = dedent(f"""
+        You are a Dart/Flutter expert. Below is a single line of Dart code
+        from file `{file_path}`, line {line_no}, which triggers lint/analysis
+        error `{code}`:
 
-def extract_diff(pr, base, sha):
-    blocks = []
-    for f in changed_files(pr):
-        diff = subprocess.run(
-            ['git', 'diff', f'origin/{base}', sha, '--', f],
-            capture_output=True, text=True
-        ).stdout
-        cur = []
-        for l in diff.splitlines():
-            if l.startswith('+') and not l.startswith('+++'):
-                cur.append(l[1:])
-            elif cur:
-                blocks.append({'file': f, 'code': '\n'.join(cur)})
-                cur = []
-        if cur:
-            blocks.append({'file': f, 'code': '\n'.join(cur)})
-    return blocks
+        ```dart
+        {original}
+        ```
 
-# Load lint/analyzer reports
-rdir    = Path('.github/linter-reports')
-reports = {
-    'eslint':     load_json(rdir/'eslint.json')      or [],
-    'flake8':     load_json(rdir/'flake8.json')      or {},
-    'shellcheck': load_json(rdir/'shellcheck.json')  or [],
-    'dart':       load_json(rdir/'dartanalyzer.json') or {},
-    'dotnet':     load_json(rdir/'dotnet-format.json')or {}
-}
+        Rewrite just that line (or minimal snippet) to satisfy the lint/diagnostic.
+        Output only the corrected code—no extra explanation.
+    """).strip()
 
-# Gather issues
-def gather_issues(pr):
-    issues = []
-    changed = set(changed_files(pr))
-    # eslint & shellcheck
-    for key in ('eslint','shellcheck'):
-        for rpt in reports[key]:
-            path_key = 'filePath' if key=='eslint' else 'file'
-            rel = os.path.relpath(rpt.get(path_key,''))
-            if rel in changed:
-                msgs = rpt.get('messages') if key=='eslint' else [rpt]
-                for m in msgs:
-                    issues.append({
-                        'file':    rel,
-                        'line':    m.get('line'),
-                        'code':    m.get('ruleId', m.get('code', key)),
-                        'message': m.get('message')
-                    })
-    # flake8
-    for path, errs in reports['flake8'].items():
-        rel = os.path.relpath(path)
-        if rel in changed:
-            for e in errs:
-                issues.append({
-                    'file':    rel,
-                    'line':    e.get('line_number'),
-                    'code':    e.get('code'),
-                    'message': e.get('text')
-                })
-    # dart analyzer
-    for d in reports['dart'].get('diagnostics', []):
-        loc = d.get('location',{})
-        rel = os.path.relpath(loc.get('file',''))
-        if rel in changed:
-            issues.append({
-                'file':    rel,
-                'line':    loc.get('range',{}).get('start',{}).get('line'),
-                'code':    d.get('code'),
-                'message': d.get('problemMessage') or d.get('message')
-            })
-    # dotnet
-    for d in reports['dotnet'].get('Diagnostics', []):
-        rel = os.path.relpath(d.get('Path',''))
-        if rel in changed:
-            issues.append({
-                'file':    rel,
-                'line':    d['Region']['StartLine'],
-                'code':    'DotNet',
-                'message': d.get('Message')
-            })
-    return issues
-
-issues     = gather_issues(pr)
-ref_blocks = extract_diff(pr, defaults['BASE_REF'], sha)
-
-# Build markdown
-md = ["## 🚀 brandOptics AI Code Review", "", "### 📑 Index of Contents"]
-if issues:
-    md.append("- [Issues Summary](#issues)")
-if ref_blocks:
-    md.append("- [Refactoring Suggestions](#refactoring)")
-
-# Issues Table
-if issues:
-    md.extend([
-        "",
-        "---",
-        "<a name='issues'></a>",
-        "## 🚨 Issues Summary",
-        "",
-        "| File | Line | Rule | Original | Fix |",
-        "|:-----|:----:|:-----|:--------|:----|"
-    ])
-    for i in issues:
-        orig = read_line(i['file'], i['line']).replace("|","\\|").strip()
-        fix  = call_ai(
-            [
-                {"role":"system","content":"You are a Dart/Flutter expert. Output only the corrected code line to fix the lint error; no explanation."},
-                {"role":"user","content":dedent(f"""
-Fix lint error `{i['code']}` in `{i['file']}`, line {i['line']}. Rewrite only the offending line:
-```dart
-{orig}
-```
-"""
-                )}
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful Dart/Flutter assistant."},
+                {"role": "user",   "content": prompt}
             ],
+            temperature=0.0,
             max_tokens=60
-        ).strip().replace("`","\\`")
-        md.append(f"| {i['file']} | {i['line']} | `{i['code']}` | `{orig}` | `{fix}` |")
+        )
+        suggestion = response.choices[0].message.content.strip()
+        return re.sub(r"^```dart\s*|\s*```$", "", suggestion).strip()
+    except Exception as e:
+        return original
+
+# ── 7) EXTRACT ALL ISSUES FROM LINTER/ANALYZER JSONs ──────────────────
+issues: list[dict] = []
+
+# — ESLint
+if isinstance(eslint_report, list):
+    for file_report in eslint_report:
+        abs_path = file_report.get("filePath") or ""
+        rel_path = os.path.relpath(abs_path, start=os.getcwd())
+        if rel_path.startswith(".github/") or rel_path not in changed_files:
+            continue
+        for msg in file_report.get("messages", []):
+            line     = msg.get("line")
+            code     = msg.get("ruleId") or "ESLint"
+            text     = msg.get("message") or ""
+            severity = msg.get("severity", 0)
+            sev_text = "Error" if severity == 2 else "Warning"
+            if line:
+                issues.append({
+                    "file":    rel_path,
+                    "line":    line,
+                    "code":    code,
+                    "message": f"{sev_text}: [{code}] {text}"
+                })
+
+# — Flake8
+if isinstance(flake8_report, dict):
+    for abs_path, errors in flake8_report.items():
+        rel_path = os.path.relpath(abs_path, start=os.getcwd())
+        if rel_path.startswith(".github/") or rel_path not in changed_files:
+            continue
+        for err in errors:
+            line = err.get("line_number") or err.get("line")
+            code = err.get("code") or ""
+            text = err.get("text") or ""
+            if line:
+                issues.append({
+                    "file": rel_path,
+                    "line": line,
+                    "code": code,
+                    "message": f"Warning: [{code}] {text}"
+                })
+
+# — ShellCheck
+if isinstance(shellcheck_report, list):
+    for entry in shellcheck_report:
+        abs_path = entry.get("file") or ""
+        rel_path = os.path.relpath(abs_path, start=os.getcwd())
+        if rel_path.startswith(".github/") or rel_path not in changed_files:
+            continue
+        line = entry.get("line")
+        code = entry.get("code") or ""
+        text = entry.get("message") or ""
+        if line:
+            issues.append({
+                "file":    rel_path,
+                "line":    line,
+                "code":    code,
+                "message": f"Warning: [{code}] {text}"
+            })
+
+# — Dart Analyzer
+if isinstance(dartanalyzer_report, dict):
+    for diag in dartanalyzer_report.get("diagnostics", []):
+        loc      = diag.get("location", {})
+        abs_path = loc.get("file") or ""
+        rel_path = os.path.relpath(abs_path, start=os.getcwd())
+        if rel_path.startswith(".github/") or rel_path not in changed_files:
+            continue
+        line     = loc.get("range", {}).get("start", {}).get("line")
+        code     = diag.get("code") or "DartAnalyzer"
+        text     = diag.get("problemMessage") or diag.get("message") or ""
+        severity = diag.get("severity", "")
+        sev_text = "Error" if severity == "ERROR" else "Warning" if severity == "WARNING" else "Info"
+        if line is not None:
+            issues.append({
+                "file":    rel_path,
+                "line":    line,
+                "code":    code,
+                "message": f"{sev_text}: [{code}] {text}"
+            })
+
+# — .NET Format
+if isinstance(dotnet_report, dict):
+    diags = dotnet_report.get("Diagnostics") or dotnet_report.get("diagnostics") or []
+    for d in diags:
+        abs_path = d.get("Path") or d.get("path") or ""
+        rel_path = os.path.relpath(abs_path, start=os.getcwd())
+        if rel_path.startswith(".github/") or rel_path not in changed_files:
+            continue
+        region  = d.get("Region") or d.get("region") or {}
+        line    = region.get("StartLine") or region.get("startLine")
+        message = d.get("Message") or d.get("message") or ""
+        if line is not None:
+            issues.append({
+                "file":    rel_path,
+                "line":    line,
+                "code":    "DotNetFormat",
+                "message": f"Warning: {message}"
+            })
+
+# ── 8) ORGANIZE ISSUES BY FILE ─────────────────────────────────────────
+file_to_issues: dict[str, list[dict]] = {}
+for issue in issues:
+    file_to_issues.setdefault(issue["file"], []).append(issue)
+
+# ── 9) BUILD INDEX WITH ISSUE COUNTS & DETAILED TABLES ─────────────────
+md = ["## 🤖 brandOptics AI – Automated Code Review Suggestions\n"]
+if issues:
+    total_issues   = len(issues)
+    files_affected = len(file_to_issues)
+    md.append(f"⚠️ **Overall Summary:** {total_issues} issue{'s' if total_issues != 1 else ''} across {files_affected} file{'s' if files_affected != 1 else ''}.\n")
+    md.append("### Index of Affected Files\n")
+    for file_path in sorted(file_to_issues.keys()):
+        count  = len(file_to_issues[file_path])
+        anchor = file_path.lower().replace("/", "").replace(".", "")
+        md.append(f"- [{file_path}](#{anchor}) — {count} issue{'s' if count != 1 else ''}")
+    md.append("")
+    for file_path, file_issues in sorted(file_to_issues.items()):
+        anchor = file_path.lower().replace("/", "").replace(".", "")
+        md.append(f"### File: `{file_path}`\n<a name=\"{anchor}\"></a>")
+        md.append("| Line | Rule                   | Original Code                | Suggested Fix               |")
+        md.append("|:----:|:-----------------------|:-----------------------------|:----------------------------|")
+        for issue in sorted(file_issues, key=lambda x: x["line"]):
+            ln        = issue["line"]
+            code      = issue["code"]
+            msg       = issue["message"]
+            original  = get_original_line(file_path, ln).strip().replace("`","\\`").replace("|","\\|")
+            suggestion= ai_suggest_fix(code, original, file_path, ln).replace("`","\\`").replace("|","\\|")
+            md.append(f"| {ln} | `{code}`<br>{msg} | `{original}` | `{suggestion}` |")
+        md.append("")
 else:
-    md.extend(["", "---", "🎉 **No lint or analysis issues detected!**"])
+    md.append("🎉 **No issues detected.** Your code is impeccable—ready for prime time!\n")
 
-# Refactoring Table
-if ref_blocks:
-    md.extend([
-        "",
-        "---",
-        "<a name='refactoring'></a>",
-        "## 💡 Professional Refactoring Suggestions",
-        "",
-        "| File | Refactored Code |",
-        "|:-----|:----------------|"
-    ])
-    for b in ref_blocks:
-        ref_code = call_ai(
-            [
-                {"role":"system","content":"You are a senior software engineer. Output only the refactored code snippet; no explanation."},
-                {"role":"user","content":dedent(f"""
-Refactor this snippet in `{b['file']}`. Provide only the refactored code:
-```dart
-{b['code']}
-```
-"""
-                )}
+summary_body = "\n".join(md)
+
+# ── 10) PROFESSIONAL CODE REVIEW SUGGESTIONS ─────────────────────────────
+# Extract new code blocks via git diff against PR base
+base_sha = event["pull_request"]["base"]["sha"]
+prof_blocks: dict[str, list[str]] = {}
+for f in changed_files:
+    try:
+        diff = subprocess.check_output(
+            ['git', 'diff', base_sha, full_sha, '--', f],
+            text=True, errors='ignore'
+        )
+        buf = []
+        for line in diff.splitlines():
+            if line.startswith('+') and not line.startswith('+++'):
+                buf.append(line[1:])
+            elif buf:
+                prof_blocks.setdefault(f, []).append("\n".join(buf))
+                buf = []
+        if buf:
+            prof_blocks.setdefault(f, []).append("\n".join(buf))
+    except Exception:
+        continue
+
+if prof_blocks:
+    md.append("\n---\n## 💼 Professional Code Review Suggestions")
+    md.append("\nHigh-level suggestions on clarity, structure, and best practices for your new changes:")
+    md.append("| File | Suggestions |")
+    md.append("|:-----|:------------|")
+    for fpath, blocks in prof_blocks.items():
+        code_snippet = "\n\n".join(blocks)
+        prompt = dedent(f"""
+            You are a senior software engineer. Review the following new code from `{fpath}` and suggest concise, high-level improvements for readability, maintainability, and adherence to professional best practices. Output as a bullet list.
+
+            ```dart
+            {code_snippet}
+            ```
+        """)
+        resp = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a senior software engineer."},
+                {"role": "user",   "content": prompt}
             ],
-            max_tokens=200, temperature=0.2
-        ).strip()
-        escaped = html.escape(ref_code)
-        md.append(f"| {b['file']} | <pre><code>{escaped}</code></pre> |")
+            temperature=0.3,
+            max_tokens=200
+        )
+        suggestions = resp.choices[0].message.content.strip().replace("|","\\|")
+        md.append(f"| {fpath} | {suggestions} |")
 
-# Post
-comment = "\n".join(md)
-pr.create_issue_comment(comment)
-repo.get_commit(sha).create_status(
-    context="brandOptics AI code-review",
-    state='failure' if issues else 'success',
-    description="Review complete."
-)
-print(f"Posted PR review #{pr.number} 📌")
+# ── 11) POST THE COMMENT & SET STATUS ──────────────────────────────────
+pr.create_issue_comment("\n".join(md))
+
+if issues:
+    pr.create_review(
+        body=(
+            f"🤖 **brandOptics AI Neural Intelligence Engine** found **{total_issues} issue"
+            f"{'s' if total_issues!=1 else ''}** across **{files_affected} file"
+            f"{'s' if files_affected!=1 else ''}**. Please see suggestions above."
+        ),
+        event="REQUEST_CHANGES"
+    )
+    repo.get_commit(full_sha).create_status(
+        context="brandOptics AI code-review",
+        state="failure",
+        description="🚧 Issues detected—please refine your code and push updates."
+    )
+else:
+    repo.get_commit(full_sha).create_status(
+        context="brandOptics AI code-review",
+        state="success",
+        description="✅ No code issues detected. Ready to merge!"
+    )
+
+print(f"brandOptics AI has posted a consolidated code review summary on this PR! #{pr_number}.")
