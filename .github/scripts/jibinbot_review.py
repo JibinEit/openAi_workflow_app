@@ -34,12 +34,13 @@ pr        = repo.get_pull(pr_number)
 changed_files = [f.filename for f in pr.get_files() if f.patch]
 if not changed_files:
     pr.create_issue_comment(
-        "👀 brandOptics AI: No textual changes detected—nothing to review."
+        "🤖 brandOptics AI Neural Intelligence Review:\n"
+        "> Thank you for your contribution! I’ve examined the changes and found no textual updates requiring attention. Your submission is polished and ready for merge! 🎉"
     )
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI code-review",
         state="success",
-        description="No issues detected. Ready to merge!"
+        description="✅ No text changes detected. All clear for merge."
     )
     exit(0)
 
@@ -174,7 +175,7 @@ if isinstance(shellcheck_report, list):
                 "message": f"Warning: [{code}] {text}"
             })
 
-# — Dart Analyzer (use "diagnostics" key)
+# — Dart Analyzer
 if isinstance(dartanalyzer_report, dict):
     for diag in dartanalyzer_report.get("diagnostics", []):
         loc      = diag.get("location", {})
@@ -274,7 +275,7 @@ if issues:
         md.append("")  # blank line after each file’s table
 
 else:
-    md.append("brandOptics AI: No issues detected. Your submission has successfully passed the brandOptics neural network analysis. Excellent work maintaining high standards.\n")
+    md.append("🎉 **brandOptics AI Neural Intelligence Review:** No issues detected. Your code is impeccable—ready for prime time!\n")
 
 summary_body = "\n".join(md)
 
@@ -282,22 +283,17 @@ summary_body = "\n".join(md)
 pr.create_issue_comment(summary_body)
 
 if issues:
-    # Leave a “Request changes” review with overall guidance
     pr.create_review(
         body=f"""
-⚠️ **Overall Summary:** {total_issues} issue{'s' if total_issues != 1 else ''} found across {files_affected} file{'s' if files_affected != 1 else ''}.
+🤖 **brandOptics AI Neural Intelligence Engine** has identified **{total_issues} issue{'s' if total_issues != 1 else ''}** across **{files_affected} file{'s' if files_affected != 1 else ''}**.  
+Your effort is truly appreciated—let’s refine these details together. 😊
 
-✨🚫 **Hey there! brandOptics AI spotted some critical issues that need your attention before merging.** ✨
+> **Next Steps:**  
+> • Resolve syntax errors  
+> • Address lint warnings  
+> • Remove unused or undefined symbols  
 
-> Please review the tables above for details. Below is what you’ll need to do:
->
-> • **Fix Syntax Errors**  
-> • **Address Lint Warnings**  
-> • **Remove Unused or Undefined Symbols**
-
-Once you’ve applied these corrections and pushed a new commit, this check will pass and the merge button will be enabled.
-
-If you have any questions about the suggestions or need clarification on a particular issue, feel free to ask! 😊
+Once these adjustments are applied and a new commit is pushed, your merge request will shine with approval.
 """,
         event="REQUEST_CHANGES"
     )
@@ -305,13 +301,13 @@ If you have any questions about the suggestions or need clarification on a parti
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI code-review",
         state="failure",
-        description="Serious code issues detected! Please fix before merging."
+        description="🚧 Issues detected—please refine your code and push updates."
     )
 else:
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI code-review",
         state="success",
-        description="No code issues detected. Ready to merge!"
+        description="✅ No code issues detected. Ready to merge!"
     )
 
 print(f"brandOptics AI has posted a consolidated code review summary on this PR! #{pr_number}.")
