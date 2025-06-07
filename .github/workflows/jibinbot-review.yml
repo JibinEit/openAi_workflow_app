@@ -1,125 +1,125 @@
-# .github/workflows/jibinbot-review.yml
+# # .github/workflows/jibinbot-review.yml
 
-name: "brandOptics AI 🤖 Code Review"
+# name: "brandOptics AI 🤖 Code Review"
 
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+# on:
+#   pull_request:
+#     types: [opened, synchronize, reopened]
 
-permissions:
-  contents: read
-  pull-requests: write
-  statuses: write
+# permissions:
+#   contents: read
+#   pull-requests: write
+#   statuses: write
 
-jobs:
-  review:
-    name: "Run Bot Review"
-    runs-on: ubuntu-latest
+# jobs:
+#   review:
+#     name: "Run Bot Review"
+#     runs-on: ubuntu-latest
 
-    steps:
-      # ── 1) CHECKOUT THE CODE ────────────────────────────────────────────
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+#     steps:
+#       # ── 1) CHECKOUT THE CODE ────────────────────────────────────────────
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
 
-      # ── 2) SET UP PYTHON ────────────────────────────────────────────────
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
+#       # ── 2) SET UP PYTHON ────────────────────────────────────────────────
+#       - name: Set up Python 3.10
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: "3.10"
 
-      # ── 3) INSTALL PYTHON DEPENDENCIES ─────────────────────────────────
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install openai PyGithub flake8 flake8-json
+#       # ── 3) INSTALL PYTHON DEPENDENCIES ─────────────────────────────────
+#       - name: Install Python dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install openai PyGithub flake8 flake8-json
 
-      # ── 4) SET UP NODE & ESLINT ────────────────────────────────────────
-      - name: Set up Node 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: "18"
-      - name: Install ESLint
-        run: npm install -g eslint
+#       # ── 4) SET UP NODE & ESLINT ────────────────────────────────────────
+#       - name: Set up Node 18
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: "18"
+#       - name: Install ESLint
+#         run: npm install -g eslint
 
-      # ── 5) INSTALL SHELLCHECK ──────────────────────────────────────────
-      - name: Install ShellCheck
-        run: |
-          sudo apt-get update && sudo apt-get install -y shellcheck
+#       # ── 5) INSTALL SHELLCHECK ──────────────────────────────────────────
+#       - name: Install ShellCheck
+#         run: |
+#           sudo apt-get update && sudo apt-get install -y shellcheck
 
-      # ── 6) INSTALL .NET SDK ────────────────────────────────────────────
-      - name: Set up .NET SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: "7.0.x"
+#       # ── 6) INSTALL .NET SDK ────────────────────────────────────────────
+#       - name: Set up .NET SDK
+#         uses: actions/setup-dotnet@v3
+#         with:
+#           dotnet-version: "7.0.x"
 
-      # ── 7) INSTALL FLUTTER SDK ─────────────────────────────────────────
-      - name: Install Flutter SDK (stable channel)
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
+#       # ── 7) INSTALL FLUTTER SDK ─────────────────────────────────────────
+#       - name: Install Flutter SDK (stable channel)
+#         uses: subosito/flutter-action@v2
+#         with:
+#           channel: stable
 
-      # ── 8) PREPARE LINTER-REPORTS FOLDER ───────────────────────────────
-      - name: Create linter-reports directory
-        run: mkdir -p .github/linter-reports
+#       # ── 8) PREPARE LINTER-REPORTS FOLDER ───────────────────────────────
+#       - name: Create linter-reports directory
+#         run: mkdir -p .github/linter-reports
 
-      # ── 9) RUN ESLINT (JS/TS/React/Angular) ────────────────────────────
-      - name: Run ESLint
-        run: |
-          FILES=$(find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \))
-          if [ -n "$FILES" ]; then
-            eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' \
-              --format json \
-              --output-file .github/linter-reports/eslint.json || true
-          fi
+#       # ── 9) RUN ESLINT (JS/TS/React/Angular) ────────────────────────────
+#       - name: Run ESLint
+#         run: |
+#           FILES=$(find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \))
+#           if [ -n "$FILES" ]; then
+#             eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' \
+#               --format json \
+#               --output-file .github/linter-reports/eslint.json || true
+#           fi
 
-      # ── 10) RUN FLAKE8 (Python) ────────────────────────────────────────
-      - name: Run Flake8
-        run: |
-          FILES=$(find . -type f -name "*.py")
-          if [ -n "$FILES" ]; then
-            flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
-          fi
+#       # ── 10) RUN FLAKE8 (Python) ────────────────────────────────────────
+#       - name: Run Flake8
+#         run: |
+#           FILES=$(find . -type f -name "*.py")
+#           if [ -n "$FILES" ]; then
+#             flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
+#           fi
 
-      # ── 11) RUN SHELLCHECK (Shell scripts) ─────────────────────────────
-      - name: Run ShellCheck
-        run: |
-          FILES=$(find . -type f -name "*.sh")
-          if [ -n "$FILES" ]; then
-            find . -type f -name "*.sh" \
-              | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
-          fi
+#       # ── 11) RUN SHELLCHECK (Shell scripts) ─────────────────────────────
+#       - name: Run ShellCheck
+#         run: |
+#           FILES=$(find . -type f -name "*.sh")
+#           if [ -n "$FILES" ]; then
+#             find . -type f -name "*.sh" \
+#               | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
+#           fi
 
-      # ── 12) FETCH DART/FLUTTER DEPENDENCIES ─────────────────────────────
-      - name: Fetch dependencies for Flutter/Dart
-        run: |
-          if [ -f "pubspec.yaml" ]; then
-            flutter pub get
-          fi
+#       # ── 12) FETCH DART/FLUTTER DEPENDENCIES ─────────────────────────────
+#       - name: Fetch dependencies for Flutter/Dart
+#         run: |
+#           if [ -f "pubspec.yaml" ]; then
+#             flutter pub get
+#           fi
 
-      # ── 13) RUN FLUTTER/DART ANALYZER ───────────────────────────────────
-      - name: Run Dart/Flutter Analyzer
-        run: |
-          if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
-            dart analyze --format=json > .github/linter-reports/dartanalyzer.json || true
-          else
-            echo '{"issues":[]}' > .github/linter-reports/dartanalyzer.json
-          fi
+#       # ── 13) RUN FLUTTER/DART ANALYZER ───────────────────────────────────
+#       - name: Run Dart/Flutter Analyzer
+#         run: |
+#           if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
+#             dart analyze --format=json > .github/linter-reports/dartanalyzer.json || true
+#           else
+#             echo '{"issues":[]}' > .github/linter-reports/dartanalyzer.json
+#           fi
 
-      # ── 14) DEBUG: SHOW FIRST LINES OF ANALYZER JSON ────────────────────
-      - name: Dump first lines of analyzer JSON
-        run: |
-          echo "=== begin dartanalyzer.json ==="
-          head -n 20 .github/linter-reports/dartanalyzer.json || echo "(file is empty)"
-          echo "=== end dartanalyzer.json ==="
+#       # ── 14) DEBUG: SHOW FIRST LINES OF ANALYZER JSON ────────────────────
+#       - name: Dump first lines of analyzer JSON
+#         run: |
+#           echo "=== begin dartanalyzer.json ==="
+#           head -n 20 .github/linter-reports/dartanalyzer.json || echo "(file is empty)"
+#           echo "=== end dartanalyzer.json ==="
 
-      # ── 15) RUN THE AI REVIEW SCRIPT ───────────────────────────────────
-      - name: Run Bot AI review
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
-        run: |
-          python .github/scripts/jibinbot_review.py
+#       # ── 15) RUN THE AI REVIEW SCRIPT ───────────────────────────────────
+#       - name: Run Bot AI review
+#         env:
+#           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           GITHUB_REPOSITORY: ${{ github.repository }}
+#           GITHUB_EVENT_PATH: ${{ github.event_path }}
+#         run: |
+#           python .github/scripts/jibinbot_review.py
