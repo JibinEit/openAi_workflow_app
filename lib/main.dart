@@ -1,3 +1,4 @@
+
 import "package:flutter/material.dart";
 
 void main() => runApp(const MyApp());
@@ -28,11 +29,12 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  int _clickCount = 0;
 
-  void _incrementCounter() {
+  
+  void _incrementClickCount() {
     setState(() {
-      _counter++;
+      _clickCount += 1;
     });
   }
 
@@ -40,27 +42,41 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(final BuildContext context) =>
      Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: () {
+          final Color inversePrimaryColor = Theme.of(context).colorScheme.inversePrimary;
+          return inversePrimaryColor;
+        }(),
         title: Text(widget.title),
       ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              "You have pushed the button this many times:",
+            Text(
+              _clickCount.toString(),
             ),
             Text(
-              "$_counter",
+              "$_clickCount",
               style: Theme.of(context).textTheme.headlineMedium,
             ),
           ],
         ),
       ),
-      floatingActionButton: FloattionButton(
-        onPressed: ,
-        tooltip: 'Increment's',
-        child:  Icon(Icons.add),
+      floatingActionButton: FloatingActionButton(
+        onPressed: textToBinary("Hello World").isEmpty
+            ? null
+            : _incrementClickCount,
+        child: const Icon(Icons.add, semanticLabel: "Add One"),
+        
       ),
     );
   }
+
+
+
+
+
+String textToBinary(final String text) => text.runes
+    .map((final int rune) => rune.toRadixString(2).padLeft(8, "0"))
+    .join(" ");
+
