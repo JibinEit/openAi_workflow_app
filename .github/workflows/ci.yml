@@ -19,7 +19,7 @@ jobs:
 
       # 2) Invoke your composite Action
       - name: Run brandOptics AI review
-        uses: brandoptics/brandOptics_ai_review_bot_action@v1.7.0
+        uses: brandoptics/brandOptics_ai_review_bot_action@v1.8.0
         with:
           openai_key:   ${{ secrets.OPENAI_API_KEY}}
           github_token: ${{ secrets.GITHUB_TOKEN }}
