@@ -64,8 +64,7 @@ def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
             prefix = line[0]
             if prefix in (' ', '+', '-'):
                 if prefix != '-': file_line += 1
-                if abs(file_line - line_no) <= ctx:
-                    hunk.append(line)
+                if abs(file_line - line_no) <= ctx: hunk.append(line)
                 if file_line > line_no + ctx: break
     return '\n'.join(hunk)
 
@@ -102,55 +101,50 @@ issues = []
 # ESLint
 if isinstance(eslint_report, list):
     for rep in eslint_report:
-        path = os.path.relpath(rep.get('filePath',''))
+        path = os.path.relpath(rep.get('filePath',''), start=os.getcwd())
         if path in changed_files:
             for msg in rep.get('messages', []):
                 ln = msg.get('line')
-                if ln:
-                    issues.append({'file': path, 'line': ln,
-                                   'code': msg.get('ruleId','ESLint'),
-                                   'message': msg.get('message','')})
+                if ln: issues.append({'file':path,'line':ln,
+                                      'code':msg.get('ruleId','ESLint'),
+                                      'message':msg.get('message','')})
 # Flake8
 if isinstance(flake8_report, dict):
-    for ap, errs in flake8_report.items():
-        path = os.path.relpath(ap)
+    for abs_path, errs in flake8_report.items():
+        path = os.path.relpath(abs_path, start=os.getcwd())
         if path in changed_files:
-            for e in errs:
-                ln = e.get('line_number') or e.get('line')
-                if ln:
-                    issues.append({'file': path, 'line': ln,
-                                   'code': e.get('code','Flake8'),
-                                   'message': e.get('text','')})
+            for err in errs:
+                ln = err.get('line_number') or err.get('line')
+                if ln: issues.append({'file':path,'line':ln,
+                                      'code':err.get('code','Flake8'),
+                                      'message':err.get('text','')})
 # ShellCheck
 if isinstance(shellcheck_report, list):
     for ent in shellcheck_report:
-        path = os.path.relpath(ent.get('file',''))
+        path = os.path.relpath(ent.get('file',''), start=os.getcwd())
         ln = ent.get('line')
-        if path in changed_files and ln:
-            issues.append({'file': path, 'line': ln,
-                           'code': ent.get('code','ShellCheck'),
-                           'message': ent.get('message','')})
+        if path in changed_files and ln: issues.append({'file':path,'line':ln,
+                                                         'code':ent.get('code','ShellCheck'),
+                                                         'message':ent.get('message','')})
 # Dart Analyzer
 if isinstance(dartanalyzer_report, dict):
     for diag in dartanalyzer_report.get('diagnostics', []):
         loc = diag.get('location', {})
-        path = os.path.relpath(loc.get('file',''))
+        path = os.path.relpath(loc.get('file',''), start=os.getcwd())
         ln = loc.get('range',{}).get('start',{}).get('line')
-        if path in changed_files and ln:
-            issues.append({'file': path, 'line': ln,
-                           'code': diag.get('code','DartAnalyzer'),
-                           'message': diag.get('problemMessage') or diag.get('message','')})
+        if path in changed_files and ln: issues.append({'file':path,'line':ln,
+                                                        'code':diag.get('code','DartAnalyzer'),
+                                                        'message':diag.get('problemMessage') or diag.get('message','')})
 # .NET Format
 if isinstance(dotnet_report, dict):
     diags = dotnet_report.get('Diagnostics') or dotnet_report.get('diagnostics')
     if isinstance(diags, list):
         for d in diags:
-            path = os.path.relpath(d.get('Path') or d.get('path',''))
+            path = os.path.relpath(d.get('Path') or d.get('path',''), start=os.getcwd())
             ln = d.get('Region',{}).get('StartLine')
-            if path in changed_files and ln:
-                issues.append({'file': path, 'line': ln,
-                               'code': 'DotNetFormat',
-                               'message': d.get('Message','')})
+            if path in changed_files and ln: issues.append({'file':path,'line':ln,
+                                                           'code':'DotNetFormat',
+                                                           'message':d.get('Message','')})
 
 # ── 8) GROUP AND FORMAT OUTPUT ─────────────────────────────────────────
 file_groups = {}
@@ -164,7 +158,7 @@ for file_path, file_issues in sorted(file_groups.items()):
     md.append('| Line | Issue | Fix (summary) |')
     md.append('|:----:|:------|:--------------|')
     gh_file = next(f for f in pr.get_files() if f.filename == file_path)
-    patch = gh_file.patch or ''
+    patch   = gh_file.patch or ''
     details = []
     for it in sorted(file_issues, key=lambda x: x['line']):
         ln = it['line']
@@ -173,17 +167,15 @@ for file_path, file_issues in sorted(file_groups.items()):
         ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
         m = re.search(r'Fix:\s*```dart\n([\s\S]*?)```', ai_out)
         full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
-        # summary: include two lines for more context
+        # summary: include two lines
         lines = full_fix.splitlines()
-        summary = ' '.join(lines[:2]).strip().replace('|','\\|')
+        summary = ' '.join(lines[:2]).replace('|','\\|')
         md.append(f"| {ln} | {issue_md} | `{summary}` |")
         details.append((ln, full_fix, ai_out))
     md.append('')
     for ln, full_fix, ai_out in details:
-        md.append('<details>
-')
-        md.append(f'<summary><strong>Full fix for line {ln}</strong></summary>
-')
+        md.append('<details>')
+        md.append(f'<summary><strong>Full fix for line {ln}</strong></summary>')
         md.append('```dart')
         md.append(full_fix)
         md.append('```')
@@ -193,10 +185,10 @@ for file_path, file_issues in sorted(file_groups.items()):
             md.append('**Refactor:**')
             md.append(ref.group(1).strip())
         if why:
-            md.append('\n**Why:**')
+            md.append('**Why:**')
             md.append(why.group(1).strip())
-        md.append('</details>
-')
+        md.append('</details>')
+        md.append('')
 if not issues:
     md.append('🎉 No issues detected. Ready to merge! 🎉')
 
