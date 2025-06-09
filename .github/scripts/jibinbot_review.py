@@ -306,8 +306,9 @@ for file_path, file_issues in sorted(file_groups.items()):
     gh_file = next(f for f in pr.get_files() if f.filename == file_path)
     patch = gh_file.patch or ''
     details = []
-for it in sorted(file_issues, key=lambda x: x['line']):
-    ln = it['line']
+    if 'file_issues' in locals() and file_issues:
+        for it in sorted(file_issues, key=lambda x: x['line']):
+            ln = it['line']
     issue_md = f"`{it['code']}` {it['message']}"
     ctx = get_patch_context(patch, ln)
     ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
