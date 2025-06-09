@@ -1,8 +1,8 @@
- class Somthing {
+class Something {
+
+  Something(this.a);
   final String a;
-   
+
   @override
-  String toString() {
-    return 'Something(a: $a)';
-  }
+  String toString() => "Something(a: $a)";
 }
