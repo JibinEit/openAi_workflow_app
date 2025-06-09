@@ -25,7 +25,18 @@ pr_number = event["pull_request"]["number"]
 full_sha  = event["pull_request"]["head"]["sha"]
 repo      = gh.get_repo(REPO_NAME)
 pr        = repo.get_pull(pr_number)
+# right after you do:
+repo      = gh.get_repo(REPO_NAME)
 
+# ── Insert logo at top of comment ────────────────────────────────────
+# get the default branch (usually "main" or "master")
+default_branch = repo.default_branch
+
+# build the raw.githubusercontent URL to your asset
+img_url = (
+    f"https://raw.githubusercontent.com/"
+    f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
+)
 # ── 3) DETECT CHANGED FILES (exclude .github/) ─────────────────────────
 changed_files = [f.filename for f in pr.get_files()
                  if f.patch and not f.filename.lower().startswith('.github/')]
@@ -236,13 +247,13 @@ for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 # Header with summary
 # at the top of your comment body…
 
- 
+
 md = [
     '## 🔮🧠 brandOptics AI Neural Nexus Recommendations & Code Review Suggestions',
     f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).',
     ''
 ]
-
+md.insert(0, f'<img src="{img_url}" width="100" height="100" />')
 # Troll Section
 troll_prompt = dedent("""
 Invent a completely new, funny, over-the-top **office prank or office troll** that could happen at a software company.
