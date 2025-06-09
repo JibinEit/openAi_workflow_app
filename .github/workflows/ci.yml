@@ -1,25 +1,25 @@
-# name: "brandOptics AI Code Review"
+name: "brandOptics AI Code Review"
 
-# on:
-#   pull_request:
-#     types: [opened, synchronize, reopened]
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
 
-# permissions:
-#   contents: read
-#   pull-requests: write
-#   statuses: write
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
 
-# jobs:
-#   review:
-#     runs-on: ubuntu-latest
-#     steps:
-#       # 1) Always checkout first
-#       - name: Checkout code
-#         uses: actions/checkout@v4
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      # 1) Always checkout first
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-#       # 2) Invoke your composite Action
-#       - name: Run brandOptics AI review
-#         uses: brandoptics/brandOptics_ai_review_bot_action@v1.7.0
-#         with:
-#           openai_key:   ${{ secrets.OPENAI_API_KEY}}
-#           github_token: ${{ secrets.GITHUB_TOKEN }}
+      # 2) Invoke your composite Action
+      - name: Run brandOptics AI review
+        uses: brandoptics/brandOptics_ai_review_bot_action@v1.7.0
+        with:
+          openai_key:   ${{ secrets.OPENAI_API_KEY}}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
