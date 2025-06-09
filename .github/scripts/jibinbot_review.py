@@ -157,7 +157,12 @@ md = [
 
 # Troll Section
 troll_prompt = dedent("""
-Write a short, simple, funny “office troll” about a software company—playfully rib developers, QA, leads, and management. Keep it light, AI-generated, and easy to read.
+Write an over-the-top, laugh-out-loud “office troll” about a software company—turn it into a full-blown prank war:
+– Devs replace every console.log with “SURPRISE! 🎉🙃” and giggle in the break room  
+– QA answers every ticket with “Did you reboot the universe? 🐞😜”  
+– Leads schedule a “5-minute” huddle that lasts until Friday 🤣🕒  
+– Management unveils a “happiness index” chart—100% slice is coffee ☕📊😂  
+Keep it under five lines and jam-packed with emojis for max fun!
 """)
 troll_resp = openai.chat.completions.create(
     model="gpt-4o-mini",
@@ -171,7 +176,7 @@ troll_resp = openai.chat.completions.create(
 troll = troll_resp.choices[0].message.content.strip()
 
 md.append("---")
-md.append("> 🤖 _Office Troll:_")
+md.append("--> 🎭 Prank War Dispatch:--")
 for line in troll.splitlines():
     md.append(f"> {line}")
 md.append("---")
