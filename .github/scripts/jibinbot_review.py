@@ -256,7 +256,7 @@ md.append('')
 # Title on its own line
 md.append('# brandOptics AI Neural Nexus')
 md.append('')
-
+ 
 # Blank line between title and summary
 md.append('## Recommendations & Review Suggestions')
 md.append('')
@@ -346,13 +346,13 @@ if details:
     md.append('</details>')
     md.append('')
 if not issues:
-    
-    # # 1) image on its own line
-    # md.append(f'<img src="{img_url}" width="100" height="100" />')
-    # md.append('')
-    # md.append('# brandOptics Neural AI Review:')
-    # md.append('')
-    # 4) summary text
+    md.clear()
+    # 1) image on its own line
+    md.append(f'<img src="{img_url}" width="100" height="100" />')
+    md.append('')
+    md.append('# brandOptics Neural AI Review:')
+    md.append('')
+ 
     md.append('**No issues found—your code** passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
 
     # 5) another blank line before whatever comes next
