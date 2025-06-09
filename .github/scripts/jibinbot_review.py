@@ -297,7 +297,7 @@ for line in troll.splitlines():
     md.append(f"> {line}")                # each line must also start with '>'
 md.append("---")
  
-
+details = []  
 for file_path, file_issues in sorted(file_groups.items()):
     md.append(f"**File =>** `{file_path}`")
     md.append('')
