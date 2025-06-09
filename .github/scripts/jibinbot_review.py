@@ -252,9 +252,9 @@ md = []
 
 # Prepend your logo
 md.append(f'<img src="{img_url}" width="100" height="100" />')
-
+md.append('')
 # Title on its own line
-md.append('## brandOptics AI Neural Nexus Recommendations & Review Suggestions')
+md.append('### brandOptics AI Neural Nexus Recommendations & Review Suggestions')
 
 # Blank line between title and summary
 md.append('')
@@ -345,7 +345,7 @@ if not issues:
     
     # 1) image on its own line
     md.append(f'<img src="{img_url}" width="100" height="100" />')
-
+    md.append('')
     # 3) real heading
     md.append('## brandOptics Neural AI Review:')
 
@@ -381,13 +381,16 @@ if issues:
     pr.create_review(
         body=dedent(f"""
     <img src="{img_url}" width="50" height="50" />
-    ## brandOptics AI Neural Nexus   
-    Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
 
-    🛠️ **Action Required**  
+    ### brandOptics AI Neural Nexus   
+    
+    ## Review: 🚧 Action Required
+
+    Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
     Thanks for your contribution! A few tweaks are needed before we can merge.
 
     🔍 **Key Findings**  
+
     1. **Errors & Warnings:** Address any compilation errors or lint violations.  
     2. **Consistency:** Update naming and formatting to match project conventions.  
     3. **Clarity:** Simplify complex blocks, remove unused code, and add concise comments.  
@@ -395,6 +398,7 @@ if issues:
     5. **Tests & Docs:** Add or update tests for new logic and refresh any related documentation.
 
     💡 **Pro Tip**  
+
     Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
 
     Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
