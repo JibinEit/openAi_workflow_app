@@ -1,11 +1,10 @@
-import "package:flutter/foundation.dart";
+class SampleClass {
+  SampleClass(this.a, this.b, this.age);
 
-class sampleclasS {
-  sampleclasS(this.a, this.b, this.age);
-
-  final String a, b;
+  final String a;
+  final String b;
   final int age;
-sdf 
+
   @override
-  String toString() => "SampleClass(name: $activeDevToolsServerAddress, age: $age)";
+  String toString() => "SampleClass(a: $a, b: $b, age: $age)";
 }
