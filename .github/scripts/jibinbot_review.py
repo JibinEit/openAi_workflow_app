@@ -191,10 +191,10 @@ for file_path, file_issues in sorted(file_groups.items()):
             md.append('')
         # Why section (single capture)
     # Why section (non-greedy, stops at a second "Why:")
-        why = re.search(r'Why:\s*([\s\S]*?)(?:\nWhy:|$)', ai_out)
-        if why:
-             md.append('**Why:**')
-             md.append(why.group(1).strip())
+        # why = re.search(r'Why:\s*([\s\S]*?)(?:\nWhy:|$)', ai_out)
+        # if why:
+        #      md.append('**Why:**')
+        #      md.append(why.group(1).strip())
         md.append('')
         md.append('</details>')
         md.append('')
