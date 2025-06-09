@@ -32,7 +32,7 @@ changed_files = [f.filename for f in pr.get_files()
 if not changed_files:
     pr.create_issue_comment("🔮🧠 brandOptics AI Neural Nexus Review — no relevant code changes detected.")
     repo.get_commit(full_sha).create_status(
-        context="🔮🧠 brandOptics AI Neural Nexus Code Review",
+        context="brandOptics AI Neural Nexus Code Review",
         state="success",
         description="No relevant code changes detected."
     )
@@ -150,22 +150,25 @@ for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 
 # Header with summary
 # at the top of your comment body…
+
+ 
 md = [
-    # raw.githubusercontent URL so GitHub can fetch it
-    '![brandOptics Logo](https://raw.githubusercontent.com/OWNER/REPO/main/.github/assets/bailogo.png)',
-    '## brandOptics AI Neural Nexus Recommendations & Code Review Suggestions',
+    '## 🔮🧠 brandOptics AI Neural Nexus Recommendations & Code Review Suggestions',
     f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).',
     ''
 ]
 
 # Troll Section
 troll_prompt = dedent("""
-Write an over-the-top, laugh-out-loud “office troll” about a software company—turn it into a full-blown prank war:
-– Devs replace every console.log with “SURPRISE! 🎉🙃” and giggle in the break room  
-– QA answers every ticket with “Did you reboot the universe? 🐞😜”  
-– Leads schedule a “5-minute” huddle that lasts until Friday 🤣🕒  
-– Management unveils a “happiness index” chart—100% slice is coffee ☕📊😂  
-Keep it under five lines and jam-packed with emojis for max fun!
+Invent a completely new, funny, over-the-top **office prank or office troll** that could happen at a software company.
+Requirements:
+- Make it DIFFERENT each time you write it
+- It can involve Developers, QA, Management, or any other team
+- It can involve code, coffee, meetings, office life, or totally absurd things
+- Keep it SHORT (max 5 lines)
+- Use plenty of fun emojis
+- Do NOT always repeat the same joke style — be creative!
+Generate ONE such funny prank now:
 """)
 troll_resp = openai.chat.completions.create(
     model="gpt-4o-mini",
@@ -225,9 +228,8 @@ for file_path, file_issues in sorted(file_groups.items()):
         md.append('</details>')
         md.append('')
 if not issues:
-    # Success message
+    
     md.append(
-          '![brandOptics Logo](https://raw.githubusercontent.com/OWNER/REPO/main/.github/assets/bailogo.png)'
         ' 🧠✅ BrandOptics Neural AI Review: '
         'No issues found—your code passes all lint checks, follows best practices, '
         'and is performance-optimized. 🚀 Great job, developer! Ready to merge!'
@@ -253,10 +255,10 @@ body = '\n'.join(md)
 pr.create_issue_comment(body)
 total_issues = len(issues)
 files_affected = len(file_groups)
+
 if issues:
     pr.create_review(
-    body=f"""
-     '![brandOptics Logo](https://raw.githubusercontent.com/OWNER/REPO/main/.github/assets/bailogo.png)'
+    body= f"""
 🧠✨ **brandOptics AI Neural Nexus**  
 Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
 
@@ -279,13 +281,13 @@ Once these tweaks are applied and you push a new commit, I’ll happily re-revie
 )
 
     repo.get_commit(full_sha).create_status(
-        context="🔮🧠 brandOptics AI Neural Nexus Code Review",
+        context="brandOptics AI Neural Nexus Code Review",
         state="failure",
-        description="🚧 Issues detected—please refine your code and push updates."
+        description="Issues detected—please refine your code and push updates."
     )
 else:
     repo.get_commit(full_sha).create_status(
-    context='🔮🧠 brandOptics AI Neural Nexus Code Review',
+    context='brandOptics AI Neural Nexus Code Review',
     state='failure' if issues else 'success',
     description=('Issues detected — please refine your code.' if issues else 'No code issues detected.')
 )
