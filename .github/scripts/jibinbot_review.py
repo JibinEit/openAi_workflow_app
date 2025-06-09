@@ -256,12 +256,9 @@ md.append('')
 # Title on its own line
 md.append('# brandOptics AI Neural Nexus')
 md.append('')
-if not file_groups:
-    # No issues anywhere
-    md.append("No issues found—your code is green! 🚀\n You’re all set to merge. 🎉")
-else: 
+
 # Blank line between title and summary
-    md.append('## Recommendations & Review Suggestions')
+md.append('## Recommendations & Review Suggestions')
 md.append('')
 # Summary on its own line
 md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).')
@@ -350,11 +347,11 @@ if details:
     md.append('')
 if not issues:
     
-    # 1) image on its own line
-    md.append(f'<img src="{img_url}" width="100" height="100" />')
-    md.append('')
-    md.append('# brandOptics Neural AI Review:')
-    md.append('')
+    # # 1) image on its own line
+    # md.append(f'<img src="{img_url}" width="100" height="100" />')
+    # md.append('')
+    # md.append('# brandOptics Neural AI Review:')
+    # md.append('')
     # 4) summary text
     md.append('**No issues found—your code** passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
 
