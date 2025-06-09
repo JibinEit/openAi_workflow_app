@@ -149,8 +149,11 @@ file_groups = {}
 for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 
 # Header with summary
+# at the top of your comment body…
 md = [
-    '## 🔮🧠 brandOptics AI Neural Nexus Recommendations & Code Review Suggestions',
+    # raw.githubusercontent URL so GitHub can fetch it
+    '![brandOptics Logo](https://raw.githubusercontent.com/OWNER/REPO/main/.github/assets/bailogo.png)',
+    '## brandOptics AI Neural Nexus Recommendations & Code Review Suggestions',
     f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).',
     ''
 ]
@@ -224,7 +227,8 @@ for file_path, file_issues in sorted(file_groups.items()):
 if not issues:
     # Success message
     md.append(
-        '🧠✅ BrandOptics Neural AI Review: '
+          '![brandOptics Logo](https://raw.githubusercontent.com/OWNER/REPO/main/.github/assets/bailogo.png)'
+        ' 🧠✅ BrandOptics Neural AI Review: '
         'No issues found—your code passes all lint checks, follows best practices, '
         'and is performance-optimized. 🚀 Great job, developer! Ready to merge!'
     )
@@ -252,6 +256,7 @@ files_affected = len(file_groups)
 if issues:
     pr.create_review(
     body=f"""
+     '![brandOptics Logo](https://raw.githubusercontent.com/OWNER/REPO/main/.github/assets/bailogo.png)'
 🧠✨ **brandOptics AI Neural Nexus**  
 Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
 
