@@ -88,7 +88,22 @@ def detect_language(file_path: str) -> str:
         '.less':       'Less',
         # add more as needed…
     }.get(ext, 'general programming')
-
+# add this near the top, alongside detect_language()
+FENCE_BY_LANG = {
+    'Dart/Flutter':     'dart',
+    'TypeScript/Angular':'ts',
+    'JavaScript/React': 'js',
+    'TypeScript/React': 'ts',
+    'Python':           'python',
+    'Java':             'java',
+    '.NET C#':          'csharp',
+    'Go':               'go',
+    'HTML':             'html',
+    'CSS':              'css',
+    'SCSS/Sass':        'scss',
+    'Less':             'less',
+    'general programming': ''
+}
 # ── 6) AI SUGGESTION ───────────────────────────────────────────────────
 def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> str:
     lang = detect_language(file_path)
@@ -255,7 +270,7 @@ md.append("> 🎭 _Prank War Dispatch:_")    # ← use '>' for blockquotes
 for line in troll.splitlines():
     md.append(f"> {line}")                # each line must also start with '>'
 md.append("---")
-
+ 
 
 for file_path, file_issues in sorted(file_groups.items()):
     md.append(f"**File =>** `{file_path}`")
@@ -270,7 +285,13 @@ for file_path, file_issues in sorted(file_groups.items()):
         issue_md = f"`{it['code']}` {it['message']}"
         ctx = get_patch_context(patch, ln)
         ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
-        m = re.search(r'Fix:\s*```dart\n([\s\S]*?)```', ai_out)
+            # 1) determine fence based on file_path
+        lang = detect_language(file_path)
+        fence = FENCE_BY_LANG.get(lang, '')
+
+        # 2) extract the “Fix:” section regardless of fence label
+        fence_re = fence or r'\w*'
+        m = re.search(r'Fix:\s*```{fence_re}\n([\s\S]*?)```', ai_out)
         full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
         lines = full_fix.splitlines()
         # richer summary: first three lines
@@ -282,7 +303,7 @@ for file_path, file_issues in sorted(file_groups.items()):
         md.append('<details>')
         md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> ---------------- (click to view)</summary>')
         md.append('')
-        md.append('```dart')
+        md.append('```{fence}')
         md.append(full_fix)
         md.append('```')
         md.append('')
