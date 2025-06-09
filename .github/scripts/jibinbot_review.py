@@ -6,7 +6,7 @@ from pathlib import Path
 from textwrap import dedent
 import openai
 from github import Github
-
+from textwrap import dedent
 # ── 1) SETUP ──────────────────────────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
@@ -253,11 +253,8 @@ md = []
 # Prepend your logo
 md.append(f'<img src="{img_url}" width="100" height="100" />')
 
-# Blank line after image
-md.append('')
-
 # Title on its own line
-md.append('### brandOptics AI Neural Nexus Recommendations & Review Suggestions')
+md.append('## brandOptics AI Neural Nexus Recommendations & Review Suggestions')
 
 # Blank line between title and summary
 md.append('')
@@ -346,13 +343,17 @@ for ln, full_fix, ai_out in details:
     md.append('')
 if not issues:
     
-    md.append(
-        f'<img src="{img_url}" width="100" height="100" /> '
-        '## brandOptics Neural AI Review: '
-        'No issues found—your code passes all lint checks, follows best practices, '
-        'and is performance-optimized. 🚀 Great job, developer! Ready to merge!'
-        )
+    # 1) image on its own line
+    md.append(f'<img src="{img_url}" width="100" height="100" />')
 
+    # 3) real heading
+    md.append('## brandOptics Neural AI Review:')
+
+    # 4) summary text
+    md.append('No issues found—your code passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
+
+    # 5) another blank line before whatever comes next
+    md.append('')
     # Generate a quick AI‐driven developer joke
     joke_resp = openai.chat.completions.create(
         model='gpt-4o-mini',
@@ -375,29 +376,31 @@ total_issues = len(issues)
 files_affected = len(file_groups)
 
 if issues:
+
+
     pr.create_review(
-    body= f"""
+        body=dedent(f"""
     <img src="{img_url}" width="50" height="50" />
-## brandOptics AI Neural Nexus   
-Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
+    ## brandOptics AI Neural Nexus   
+    Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
 
-🛠️ Action Required
-Thanks for your contribution! A few tweaks are needed before we can merge.
+    🛠️ **Action Required**  
+    Thanks for your contribution! A few tweaks are needed before we can merge.
 
-🔍 Key Findings
-	1.	Errors & Warnings: Address any compilation errors or lint violations.
-	2.	Consistency: Update naming and formatting to match project conventions.
-	3.	Clarity: Simplify complex blocks, remove unused code, and add concise comments.
-	4.	Performance & Security: Optimize hotspots and ensure all inputs are validated.
-	5.	Tests & Docs: Add or update tests for new logic and refresh any related documentation.
+    🔍 **Key Findings**  
+    1. **Errors & Warnings:** Address any compilation errors or lint violations.  
+    2. **Consistency:** Update naming and formatting to match project conventions.  
+    3. **Clarity:** Simplify complex blocks, remove unused code, and add concise comments.  
+    4. **Performance & Security:** Optimize hotspots and ensure all inputs are validated.  
+    5. **Tests & Docs:** Add or update tests for new logic and refresh any related documentation.
 
-💡 Pro Tip
-Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
+    💡 **Pro Tip**  
+    Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
 
-Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
-""",
-    event="REQUEST_CHANGES"
-)
+    Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
+    """),
+        event="REQUEST_CHANGES"
+    )
 
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI Neural Nexus Code Review",
