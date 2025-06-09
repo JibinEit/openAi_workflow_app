@@ -280,43 +280,46 @@ for file_path, file_issues in sorted(file_groups.items()):
     gh_file = next(f for f in pr.get_files() if f.filename == file_path)
     patch = gh_file.patch or ''
     details = []
-    for it in sorted(file_issues, key=lambda x: x['line']):
-        ln = it['line']
-        issue_md = f"`{it['code']}` {it['message']}"
-        ctx = get_patch_context(patch, ln)
-        ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
-            # 1) determine fence based on file_path
-        lang = detect_language(file_path)
-        fence = FENCE_BY_LANG.get(lang, '')
+for it in sorted(file_issues, key=lambda x: x['line']):
+    ln = it['line']
+    issue_md = f"`{it['code']}` {it['message']}"
+    ctx = get_patch_context(patch, ln)
+    ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
 
-        # 2) extract the “Fix:” section regardless of fence label
-        fence_re = fence or r'\w*'
-        m = re.search(r'Fix:\s*```{fence_re}\n([\s\S]*?)```', ai_out)
-        full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
-        lines = full_fix.splitlines()
-        # richer summary: first three lines
-        summary = ' '.join(lines[:3]).replace('|','\\|')
-        md.append(f"| {ln} | {issue_md} | `{summary}` |")
-        details.append((ln, full_fix, ai_out))
+    # 1) determine fence based on file_path
+    lang = detect_language(file_path)
+    fence = FENCE_BY_LANG.get(lang, '')
+
+    # 2) extract the “Fix:” section regardless of fence label
+    fence_re = fence or r'\w*'
+    m = re.search(rf'Fix:\s*```{fence_re}\n([\s\S]*?)```', ai_out)
+    full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
+
+    lines = full_fix.splitlines()
+    summary = ' '.join(lines[:3]).replace('|','\\|')
+    md.append(f"| {ln} | {issue_md} | `{summary}` |")
+    details.append((ln, full_fix, ai_out))
+
+md.append('')
+for ln, full_fix, ai_out in details:
+    md.append('<details>')
+    md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> — click to view</summary>')
     md.append('')
-    for ln, full_fix, ai_out in details:
-        md.append('<details>')
-        md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> ---------------- (click to view)</summary>')
+
+    # Use f-string here so {fence} is replaced
+    md.append(f'```{fence}' if fence else '```')
+    md.append(full_fix)
+    md.append('```')
+    md.append('')
+
+    ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
+    if ref:
+        md.append('**Refactor:**')
+        md.append(ref.group(1).strip())
         md.append('')
-        md.append('```{fence}')
-        md.append(full_fix)
-        md.append('```')
-        md.append('')
-        # Refactor section
-        ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
-        if ref:
-            md.append('**Refactor:**')
-            md.append(ref.group(1).strip())
-            md.append('')
- 
-        md.append('')
-        md.append('</details>')
-        md.append('')
+
+    md.append('</details>')
+    md.append('')
 if not issues:
     
     md.append(
