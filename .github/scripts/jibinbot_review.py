@@ -71,11 +71,25 @@ def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
 # ── 6) AI SUGGESTION ───────────────────────────────────────────────────
 def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> str:
     prompt = dedent(f"""
-You are a Dart/Flutter expert.
-Below is the diff around line {line_no} in `{file_path}` (error: {code}):
+You are a highly experienced Dart/Flutter code reviewer and software architect.
+
+You will carefully analyze the provided code diff to identify **any and all issues** — not just the reported error. 
+Check for:
+- Syntax errors
+- Logic issues
+- Naming conventions
+- Code style and formatting
+- Readability and maintainability
+- Code structure and clarity
+- Performance optimizations
+- Security considerations
+- Flutter best practices
+- Modern Dart idioms
+- API misuse or potential bugs
+
+Below is the diff around line {line_no} in `{file_path}` (reported error: {code}):
 ```diff
 {patch_ctx}
-```
 Provide exactly three labeled sections:
 
 Fix:
@@ -164,7 +178,6 @@ Invent a completely new, funny, over-the-top **office prank or office troll** th
 Requirements:
 - Make it DIFFERENT each time you write it
 - It can involve Developers, QA, Management, or any other team
-- It can involve code, coffee, meetings, office life, or totally absurd things
 - Keep it SHORT (max 5 lines)
 - Use plenty of fun emojis
 - Do NOT always repeat the same joke style — be creative!

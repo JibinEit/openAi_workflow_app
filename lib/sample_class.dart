@@ -1,10 +1,11 @@
-class SampleClass {
-  SampleClass(this.a, this.b, this.age);
+ class Somthing {
+  final String name;
+  final int value;
 
-  final String a;
-  final String b;
-  final int age;
+ 
 
   @override
-  String toString() => "SampleClass(a: $a, b: $b, age: $age)";
+  String toString() {
+    return 'Something(name: $name, value: $value)';
+  }
 }
