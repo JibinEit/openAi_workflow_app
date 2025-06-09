@@ -32,7 +32,7 @@ changed_files = [f.filename for f in pr.get_files()
 if not changed_files:
     pr.create_issue_comment("🔮🧠 brandOptics AI Neural Nexus Review — no relevant code changes detected.")
     repo.get_commit(full_sha).create_status(
-        context="🔮🧠 brandOptics AI Neural Nexus Code Review",
+        context="brandOptics AI Neural Nexus Code Review",
         state="success",
         description="No relevant code changes detected."
     )
@@ -279,13 +279,13 @@ Once these tweaks are applied and you push a new commit, I’ll happily re-revie
 )
 
     repo.get_commit(full_sha).create_status(
-        context="🔮🧠 brandOptics AI Neural Nexus Code Review",
+        context="brandOptics AI Neural Nexus Code Review",
         state="failure",
         description="🚧 Issues detected—please refine your code and push updates."
     )
 else:
     repo.get_commit(full_sha).create_status(
-    context='🔮🧠 brandOptics AI Neural Nexus Code Review',
+    context='brandOptics AI Neural Nexus Code Review',
     state='failure' if issues else 'success',
     description=('Issues detected — please refine your code.' if issues else 'No code issues detected.')
 )
