@@ -160,12 +160,15 @@ md = [
 
 # Troll Section
 troll_prompt = dedent("""
-Write an over-the-top, laugh-out-loud “office troll” about a software company—turn it into a full-blown prank war:
-– Devs replace every console.log with “SURPRISE! 🎉🙃” and giggle in the break room  
-– QA answers every ticket with “Did you reboot the universe? 🐞😜”  
-– Leads schedule a “5-minute” huddle that lasts until Friday 🤣🕒  
-– Management unveils a “happiness index” chart—100% slice is coffee ☕📊😂  
-Keep it under five lines and jam-packed with emojis for max fun!
+Invent a completely new, funny, over-the-top **office prank or office troll** that could happen at a software company.
+Requirements:
+- Make it DIFFERENT each time you write it
+- It can involve Developers, QA, Management, or any other team
+- It can involve code, coffee, meetings, office life, or totally absurd things
+- Keep it SHORT (max 5 lines)
+- Use plenty of fun emojis
+- Do NOT always repeat the same joke style — be creative!
+Generate ONE such funny prank now:
 """)
 troll_resp = openai.chat.completions.create(
     model="gpt-4o-mini",
