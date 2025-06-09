@@ -30,11 +30,13 @@ pr        = repo.get_pull(pr_number)
 changed_files = [f.filename for f in pr.get_files()
                  if f.patch and not f.filename.lower().startswith('.github/')]
 if not changed_files:
-    pr.create_issue_comment("🤖 brandOptics AI Review — no relevant code changes detected.")
+    pr.create_issue_comment(
+        "🤖 brandOptics AI Review — no relevant code changes detected."
+    )
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI code-review",
         state="success",
-        description="✅ No relevant code changes detected."
+        description="No relevant code changes detected."
     )
     exit(0)
 
@@ -63,7 +65,7 @@ def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
             hunk = [l]
         elif file_line is not None:
             prefix = l[:1]
-            if prefix in (' ', '+', '-'):  # include context and additions
+            if prefix in (' ', '+', '-'):
                 if prefix != '-':
                     file_line += 1
                 if abs(file_line - line_no) <= ctx:
@@ -172,27 +174,28 @@ for file_path, file_issues in sorted(file_groups.items()):
         issue_md = f"`{it['code']}` {it['message']}"
         ctx      = get_patch_context(patch, ln)
         ai_out   = ai_suggest_fix(it['code'], ctx, file_path, ln)
-        # extract full Fix section fenced
-        m = re.search(r'Fix:\s*```dart\n([\s\S]*?)```', ai_out)
+        m        = re.search(r'Fix:\s*```dart([\s\S]*?)```', ai_out)
         full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
         summary  = full_fix.splitlines()[0].strip().replace('|','\\|')
         md.append(f"| {ln} | {issue_md} | `{summary}` |")
         details.append((ln, full_fix, ai_out))
     md.append('')
     for ln, full_fix, ai_out in details:
-        md.append(f"<details>\n<summary>Full fix for line {ln}</summary>\n")
+        md.append('<details>')
+        md.append(f"<summary>Full fix for line {ln}</summary>")
         md.append('```dart')
         md.append(full_fix)
         md.append('```')
         ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
         why = re.search(r'Why:\s*([\s\S]*)', ai_out)
         if ref:
-            md.append('\n**Refactor:**')
+            md.append('**Refactor:**')
             md.append(ref.group(1).strip())
         if why:
-            md.append('\n**Why:**')
+            md.append('**Why:**')
             md.append(why.group(1).strip())
-        md.append('</details>\n')
+        md.append('</details>')
+        md.append('')
 if not issues:
     md.append('🎉 No issues detected. Ready to merge! 🎉')
 
@@ -202,6 +205,7 @@ pr.create_issue_comment(body)
 repo.get_commit(full_sha).create_status(
     context='brandOptics AI code-review',
     state='failure' if issues else 'success',
-    description='🚧 Issues detected—please refine your code.' if issues else '✅ No code issues detected.'
+    description=('Issues detected — please refine your code.' 
+                 if issues else 'No code issues detected.')
 )
 print(f"Posted AI review for PR #{pr_number}")
