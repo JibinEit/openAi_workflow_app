@@ -1,15 +1,19 @@
-class SampleClass {
-  SampleClass(this.a, this.b, this.age);
+class Calculator {
+  /// Adds two numbers and returns the result.
+  double add(double a, double b) => a + b;
 
-  final String a;
-  final String b;
-  final int age;
+  /// Subtracts [b] from [a] and returns the result.
+  double subtract(double a, double b) => a - b;
 
-  @override
-  String toString() => "SampleClass(a: $a, b: $b, age: $age)";
+  /// Multiplies two numbers and returns the result.
+  double multiply(double a, double b) => a * b;
 
-  Future<void> domething() async {
-    await delayed;
-    print("Doing something with $a and $b at age $age");
+  /// Divides [a] by [b] and returns the result.
+  /// Throws [ArgumentError] if [b] is zero.
+  double divide(double a, double b) {
+    if (b == 0) {
+      throw ArgumentError('Cannot divide by zero');
+    }
+    return a / b;
   }
 }
