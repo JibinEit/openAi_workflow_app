@@ -252,18 +252,18 @@ md = []
 
 # Prepend your logo
 md.append(f'<img src="{img_url}" width="100" height="100" />')
-
+md.append('')
 # Title on its own line
 md.append('# brandOptics AI Neural Nexus')
-
+md.append('')
 # Blank line between title and summary
 md.append('## Recommendations & Review Suggestions')
-
+md.append('')
 # Summary on its own line
 md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).')
-
-# Blank line to separate from the rest of the content
 md.append('')
+# Blank line to separate from the rest of the content
+ 
 # Troll Section
 troll_prompt = dedent("""
 Invent a completely new, funny, over-the-top **office prank or office troll** that could happen at a software company.
@@ -345,9 +345,9 @@ if not issues:
     
     # 1) image on its own line
     md.append(f'<img src="{img_url}" width="100" height="100" />')
-   
+    md.append('')
     md.append('# brandOptics Neural AI Review:')
-
+    md.append('')
     # 4) summary text
     md.append('**No issues found—your code** passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
 
@@ -379,8 +379,10 @@ if issues:
 
     pr.create_review(
         body=dedent(f"""
-    <img src="{img_url}" width="100" height="100" />
+    <img src="{img_url}" width="100" height="100" /> 
+
     # brandOptics AI Neural Nexus   
+    
     ## Review: 🚧 Action Required
 
     Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
