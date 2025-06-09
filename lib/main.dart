@@ -43,7 +43,7 @@ class _MyHomePageState extends State<MyHomePage> {
      Scaffold(
       appBar: AppBar(
         backgroundColor: () {
-          final inversePrimaryColor = Theme.of(context).colorScheme.inversePrimary;
+          final Color inversePrimaryColor = Theme.of(context).colorScheme.inversePrimary;
           return inversePrimaryColor;
         }(),
         title: Text(widget.title),
@@ -52,8 +52,8 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              _clickCount.toString()df  ,
+            Text(
+              _clickCount.toString(),
             ),
             Text(
               "$_clickCount",
@@ -76,9 +76,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
 
 
-String textToBinary(String text) {
-  return text.runes
-      .map((int rune) => rune.toRadixString(2).padLeft(8, '0'))
-      .join(' ');
-}
+String textToBinary(final String text) => text.runes
+    .map((final int rune) => rune.toRadixString(2).padLeft(8, "0"))
+    .join(" ");
 

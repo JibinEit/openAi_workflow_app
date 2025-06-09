@@ -30,7 +30,7 @@ pr        = repo.get_pull(pr_number)
 changed_files = [f.filename for f in pr.get_files()
                  if f.patch and not f.filename.lower().startswith('.github/')]
 if not changed_files:
-    pr.create_issue_comment("🤖 brandOptics AI Review — no relevant code changes detected.")
+    pr.create_issue_comment("🔮🧠 brandOptics AI Neural Nexus Review — no relevant code changes detected.")
     repo.get_commit(full_sha).create_status(
         context="🔮🧠 brandOptics AI Neural Nexus Code Review",
         state="success",
@@ -155,27 +155,24 @@ md = [
     ''
 ]
 
-# Poem Section 
-poem_prompt = dedent(f"""
-Write a short, whimsical developer poem celebrating a clean code review:
-{len(issues)} issue(s) addressed across {len(file_groups)} file(s).
-Keep the tone light, inject a bit of coding humor, and make it easy to read.
+# Troll Section
+troll_prompt = dedent("""
+Write a short, simple, funny “office troll” about a software company—playfully rib developers, QA, leads, and management. Keep it light, AI-generated, and easy to read.
 """)
-poem_resp = openai.chat.completions.create(
+troll_resp = openai.chat.completions.create(
     model="gpt-4o-mini",
     messages=[
-        {"role": "system", "content": "You are a witty tech poet."},
-        {"role": "user",   "content": poem_prompt}
+        {"role": "system", "content": "You are a playful office troll."},
+        {"role": "user",   "content": troll_prompt}
     ],
     temperature=0.7,
     max_tokens=80
 )
-poem = poem_resp.choices[0].message.content.strip()
+troll = troll_resp.choices[0].message.content.strip()
 
-# Append the poem in blockquote form for freshness
 md.append("---")
-md.append("> 💬 _A little verse to brighten your review:_")
-for line in poem.splitlines():
+md.append("> 🤖 _Office Troll:_")
+for line in troll.splitlines():
     md.append(f"> {line}")
 md.append("---")
 
@@ -203,7 +200,7 @@ for file_path, file_issues in sorted(file_groups.items()):
     md.append('')
     for ln, full_fix, ai_out in details:
         md.append('<details>')
-        md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> (click to view)</summary>')
+        md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> ---------------- (click to view)</summary>')
         md.append('')
         md.append('```dart')
         md.append(full_fix)
