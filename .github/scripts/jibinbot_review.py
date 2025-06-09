@@ -153,7 +153,6 @@ for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 
  
 md = [
- 
     '## 🔮🧠 brandOptics AI Neural Nexus Recommendations & Code Review Suggestions',
     f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).',
     ''
@@ -281,7 +280,7 @@ Once these tweaks are applied and you push a new commit, I’ll happily re-revie
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI Neural Nexus Code Review",
         state="failure",
-        description="🚧 Issues detected—please refine your code and push updates."
+        description="Issues detected—please refine your code and push updates."
     )
 else:
     repo.get_commit(full_sha).create_status(
