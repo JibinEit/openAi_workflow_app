@@ -1,11 +1,11 @@
  class Somthing {
-  final String name;
-  final int value;
+  final String a;
+  final int b;
 
  
 
   @override
   String toString() {
-    return 'Something(name: $name, value: $value)';
+    return 'Something(a: $a, b: $b)';
   }
 }

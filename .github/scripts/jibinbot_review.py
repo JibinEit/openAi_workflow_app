@@ -50,7 +50,8 @@ flake8_report        = load_json(reports_dir / 'flake8.json')
 shellcheck_report    = load_json(reports_dir / 'shellcheck.json')
 dartanalyzer_report  = load_json(reports_dir / 'dartanalyzer.json')
 dotnet_report        = load_json(reports_dir / 'dotnet-format.json')
-
+htmlhint_report   = load_json(reports_dir / 'htmlhint.json')
+stylelint_report  = load_json(reports_dir / 'stylelint.json')
 # ── 5) HELPERS ─────────────────────────────────────────────────────────
 def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
     file_line = None
@@ -67,11 +68,32 @@ def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
                 if abs(file_line - line_no) <= ctx: hunk.append(line)
                 if file_line > line_no + ctx: break
     return '\n'.join(hunk)
+# ── LANGUAGE DETECTION ───────────────────────────────────────────────────
+def detect_language(file_path: str) -> str:
+    ext = Path(file_path).suffix.lower()
+    return {
+        '.dart':       'Dart/Flutter',
+        '.ts':         'TypeScript/Angular',
+        '.js':         'JavaScript/React',
+        '.jsx':        'JavaScript/React',
+        '.tsx':        'TypeScript/React',
+        '.py':         'Python',
+        '.java':       'Java',
+        '.cs':         '.NET C#',
+        '.go':         'Go',
+        '.html':       'HTML',
+        '.htm':        'HTML',
+        '.css':        'CSS',
+        '.scss':       'SCSS/Sass',
+        '.less':       'Less',
+        # add more as needed…
+    }.get(ext, 'general programming')
 
 # ── 6) AI SUGGESTION ───────────────────────────────────────────────────
 def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> str:
+    lang = detect_language(file_path)
     prompt = dedent(f"""
-You are a highly experienced Dart/Flutter code reviewer and software architect.
+You are a highly experienced {lang} code reviewer and software architect.
 
 You will carefully analyze the provided code diff to identify **any and all issues** — not just the reported error. 
 Check for:
@@ -83,8 +105,8 @@ Check for:
 - Code structure and clarity
 - Performance optimizations
 - Security considerations
-- Flutter best practices
-- Modern Dart idioms
+- {lang} best practices
+- Modern {lang} idioms
 - API misuse or potential bugs
 
 Below is the diff around line {line_no} in `{file_path}` (reported error: {code}):
@@ -99,9 +121,14 @@ Refactor:
 Why:
   Brief rationale.
 """)
+    system_prompt = (
+    f"You are a senior {lang} software architect and code reviewer. "
+    "You provide in-depth, actionable feedback, "
+    "catching syntax, style, performance, security, naming, and {lang} best practices."
+)
     resp = openai.chat.completions.create(
         model='gpt-4o-mini',
-        messages=[{'role':'system','content':'You are a helpful assistant.'},
+        messages=[{'role':'system','content':system_prompt},
                   {'role':'user','content':prompt}],
         temperature=0.0,
         max_tokens=400
@@ -158,6 +185,35 @@ if isinstance(dotnet_report, dict):
                                                            'code':'DotNetFormat',
                                                            'message':d.get('Message','')})
 
+# ── 7b) COLLECT HTMLHint ISSUES ────────────────────────────────────────
+if isinstance(htmlhint_report, list):
+    for ent in htmlhint_report:
+        path = os.path.relpath(ent.get('file', ''))
+        ln   = ent.get('line', None)
+        msg  = ent.get('message', '')
+        rule = ent.get('rule', 'HTMLHint')
+        if path in changed_files and ln:
+            issues.append({
+                'file':    path,
+                'line':    ln,
+                'code':    rule,
+                'message': msg
+            })
+
+# ── 7c) COLLECT Stylelint ISSUES ──────────────────────────────────────
+if isinstance(stylelint_report, list):
+    for rep in stylelint_report:
+        path = os.path.relpath(rep.get('source', ''))
+        ln   = rep.get('line', None)
+        msg  = rep.get('text', '')
+        rule = rep.get('rule', 'Stylelint')
+        if path in changed_files and ln:
+            issues.append({
+                'file':    path,
+                'line':    ln,
+                'code':    rule,
+                'message': msg
+            })
 # ── 8) GROUP AND FORMAT OUTPUT ─────────────────────────────────────────
 file_groups = {}
 for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)

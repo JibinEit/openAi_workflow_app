@@ -54,17 +54,24 @@ jobs:
         with:
           dotnet-version: "7.0.x"
 
-      # ── 7) INSTALL FLUTTER SDK ─────────────────────────────────────────
+      # ── 7) INSTALL dotnet-format & PRODUCE JSON ────────────────────────
+      - name: Install dotnet-format
+        run: dotnet tool install -g dotnet-format
+      - name: Run dotnet-format
+        run: |
+          dotnet format --verify-no-changes --report .github/linter-reports/dotnet-format.json || true
+
+      # ── 8) INSTALL FLUTTER SDK ─────────────────────────────────────────
       - name: Install Flutter SDK (stable channel)
         uses: subosito/flutter-action@v2
         with:
           channel: stable
 
-      # ── 8) PREPARE LINTER-REPORTS FOLDER ───────────────────────────────
+      # ── 9) PREPARE LINTER-REPORTS FOLDER ───────────────────────────────
       - name: Create linter-reports directory
         run: mkdir -p .github/linter-reports
 
-      # ── 9) RUN ESLINT (JS/TS/React/Angular) ────────────────────────────
+      # ── 10) RUN ESLINT (JS/TS/React/Angular) ───────────────────────────
       - name: Run ESLint
         run: |
           FILES=$(find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \))
@@ -74,7 +81,7 @@ jobs:
               --output-file .github/linter-reports/eslint.json || true
           fi
 
-      # ── 10) RUN FLAKE8 (Python) ────────────────────────────────────────
+      # ── 11) RUN FLAKE8 (Python) ────────────────────────────────────────
       - name: Run Flake8
         run: |
           FILES=$(find . -type f -name "*.py")
@@ -82,7 +89,29 @@ jobs:
             flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
           fi
 
-      # ── 11) RUN SHELLCHECK (Shell scripts) ─────────────────────────────
+      # ── 12) RUN STYLELINT (CSS/SCSS/LESS) ─────────────────────────────
+      - name: Install Stylelint
+        run: npm install -g stylelint stylelint-config-standard
+      - name: Run Stylelint
+        run: |
+          FILES=$(find . -type f \( -name "*.css" -o -name "*.scss" -o -name "*.less" \))
+          if [ -n "$FILES" ]; then
+            stylelint "**/*.{css,scss,less}" \
+              --formatter json \
+              --output-file .github/linter-reports/stylelint.json || true
+          fi
+
+      # ── 13) RUN HTMLHINT (HTML) ────────────────────────────────────────
+      - name: Install HTMLHint
+        run: npm install -g htmlhint
+      - name: Run HTMLHint
+        run: |
+          FILES=$(find . -type f -name "*.html")
+          if [ -n "$FILES" ]; then
+            htmlhint --format json **/*.html > .github/linter-reports/htmlhint.json || true
+          fi
+
+      # ── 14) RUN SHELLCHECK (Shell scripts) ─────────────────────────────
       - name: Run ShellCheck
         run: |
           FILES=$(find . -type f -name "*.sh")
@@ -91,14 +120,14 @@ jobs:
               | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
           fi
 
-      # ── 12) FETCH DART/FLUTTER DEPENDENCIES ─────────────────────────────
+      # ── 15) FETCH DART/FLUTTER DEPENDENCIES ────────────────────────────
       - name: Fetch dependencies for Flutter/Dart
         run: |
           if [ -f "pubspec.yaml" ]; then
             flutter pub get
           fi
 
-      # ── 13) RUN FLUTTER/DART ANALYZER ───────────────────────────────────
+      # ── 16) RUN FLUTTER/DART ANALYZER ──────────────────────────────────
       - name: Run Dart/Flutter Analyzer
         run: |
           if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
@@ -107,14 +136,14 @@ jobs:
             echo '{"issues":[]}' > .github/linter-reports/dartanalyzer.json
           fi
 
-      # ── 14) DEBUG: SHOW FIRST LINES OF ANALYZER JSON ────────────────────
+      # ── 17) DEBUG: SHOW FIRST LINES OF ANALYZER JSON ───────────────────
       - name: Dump first lines of analyzer JSON
         run: |
           echo "=== begin dartanalyzer.json ==="
           head -n 20 .github/linter-reports/dartanalyzer.json || echo "(file is empty)"
           echo "=== end dartanalyzer.json ==="
 
-      # ── 15) RUN THE AI REVIEW SCRIPT ───────────────────────────────────
+      # ── 18) RUN THE AI REVIEW SCRIPT ───────────────────────────────────
       - name: Run Bot AI review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
