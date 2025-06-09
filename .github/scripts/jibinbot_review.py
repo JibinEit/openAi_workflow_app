@@ -151,11 +151,9 @@ for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 # Header with summary
 # at the top of your comment body…
 
-repo = os.getenv("GITHUB_REPOSITORY")  # e.g. "jibin/my-app"
-branch = "main"                         # or whatever your default branch is
-logo_md = f"![brandOptics Logo](https://raw.githubusercontent.com/{repo}/{branch}/.github/assets/bailogo.png)\n\n"
+ 
 md = [
-    f'![brandOptics Logo](https://raw.githubusercontent.com/{repo}/{branch}/.github/assets/bailogo.png)',
+ 
     '## 🔮🧠 brandOptics AI Neural Nexus Recommendations & Code Review Suggestions',
     f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).',
     ''
@@ -228,12 +226,7 @@ for file_path, file_issues in sorted(file_groups.items()):
         md.append('</details>')
         md.append('')
 if not issues:
-    # Success message
-    # either insert at the top:
-    md.insert(0, logo_md)
-    # or append it immediately before your review message:
-    # md.append(logo_md)
-
+    
     md.append(
         ' 🧠✅ BrandOptics Neural AI Review: '
         'No issues found—your code passes all lint checks, follows best practices, '
@@ -263,7 +256,7 @@ files_affected = len(file_groups)
 
 if issues:
     pr.create_review(
-    body=logo_md + f"""
+    body= f"""
 🧠✨ **brandOptics AI Neural Nexus**  
 Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
 
