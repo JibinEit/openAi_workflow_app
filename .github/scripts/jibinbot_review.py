@@ -26,7 +26,7 @@ full_sha  = event["pull_request"]["head"]["sha"]
 repo      = gh.get_repo(REPO_NAME)
 pr        = repo.get_pull(pr_number)
 
-# ── 3) DETECT CHANGES (exclude .github/) ──────────────────────────────
+# ── 3) DETECT CHANGED FILES (exclude .github/) ─────────────────────────
 changed_files = [f.filename for f in pr.get_files()
                  if f.patch and not f.filename.lower().startswith('.github/')]
 if not changed_files:
@@ -44,6 +44,7 @@ def load_json(path: Path):
         return json.loads(path.read_text())
     except:
         return None
+
 reports_dir = Path('.github/linter-reports')
 eslint_report        = load_json(reports_dir / 'eslint.json')
 flake8_report        = load_json(reports_dir / 'flake8.json')
@@ -63,12 +64,10 @@ def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
         elif file_line is not None:
             prefix = line[0]
             if prefix in (' ', '+', '-'):
-                if prefix != '-':
-                    file_line += 1
+                if prefix != '-': file_line += 1
                 if abs(file_line - line_no) <= ctx:
                     hunk.append(line)
-                if file_line > line_no + ctx:
-                    break
+                if file_line > line_no + ctx: break
     return '\n'.join(hunk)
 
 # ── 6) AI SUGGESTION ───────────────────────────────────────────────────
@@ -91,8 +90,8 @@ Why:
     resp = openai.chat.completions.create(
         model='gpt-4o-mini',
         messages=[
-            {'role': 'system', 'content': 'You are a helpful assistant.'},
-            {'role': 'user',   'content': prompt}
+            {'role':'system','content':'You are a helpful assistant.'},
+            {'role':'user','content':prompt}
         ],
         temperature=0.0,
         max_tokens=400
@@ -101,8 +100,7 @@ Why:
 
 # ── 7) COLLECT ISSUES ──────────────────────────────────────────────────
 issues = []
-# (Existing linter extraction logic unchanged: ESLint, Flake8, ShellCheck, Dart Analyzer, .NET)
-
+# ESLint
 if isinstance(eslint_report, list):
     for rep in eslint_report:
         path = os.path.relpath(rep.get('filePath',''))
@@ -110,12 +108,52 @@ if isinstance(eslint_report, list):
             for msg in rep.get('messages', []):
                 ln = msg.get('line')
                 if ln:
-                    issues.append({'file': path, 'line': ln,
-                                   'code': msg.get('ruleId','ESLint'),
-                                   'message': msg.get('message','')})
-# ... Flake8, ShellCheck, DartAnalyzer, DotNetFormat follow similarly ...
+                    issues.append({'file':path,'line':ln,
+                                   'code':msg.get('ruleId','ESLint'),
+                                   'message':msg.get('message','')})
+# Flake8
+if isinstance(flake8_report, dict):
+    for ap, errs in flake8_report.items():
+        path = os.path.relpath(ap)
+        if path in changed_files:
+            for e in errs:
+                ln = e.get('line_number') or e.get('line')
+                if ln:
+                    issues.append({'file':path,'line':ln,
+                                   'code':e.get('code','Flake8'),
+                                   'message':e.get('text','')})
+# ShellCheck
+if isinstance(shellcheck_report, list):
+    for ent in shellcheck_report:
+        path = os.path.relpath(ent.get('file',''))
+        ln = ent.get('line')
+        if path in changed_files and ln:
+            issues.append({'file':path,'line':ln,
+                           'code':ent.get('code','ShellCheck'),
+                           'message':ent.get('message','')})
+# Dart Analyzer
+if isinstance(dartanalyzer_report, dict):
+    for diag in dartanalyzer_report.get('diagnostics', []):
+        loc = diag.get('location', {})
+        path = os.path.relpath(loc.get('file',''))
+        ln = loc.get('range',{}).get('start',{}).get('line')
+        if path in changed_files and ln:
+            issues.append({'file':path,'line':ln,
+                           'code':diag.get('code','DartAnalyzer'),
+                           'message':diag.get('problemMessage') or diag.get('message','')})
+# .NET Format
+if isinstance(dotnet_report, dict):
+    diags = dotnet_report.get('Diagnostics') or dotnet_report.get('diagnostics')
+    if isinstance(diags, list):
+        for d in diags:
+            path = os.path.relpath(d.get('Path') or d.get('path',''))
+            ln = d.get('Region',{}).get('StartLine')
+            if path in changed_files and ln:
+                issues.append({'file':path,'line':ln,
+                               'code':'DotNetFormat',
+                               'message':d.get('Message','')})
 
-# ── 8) GROUP & OUTPUT ─────────────────────────────────────────────────
+# ── 8) GROUP BY FILE & FORMAT OUTPUT ─────────────────────────────────
 file_groups = {}
 for issue in issues:
     file_groups.setdefault(issue['file'], []).append(issue)
@@ -134,7 +172,6 @@ for file_path, file_issues in sorted(file_groups.items()):
         issue_md = f"`{it['code']}` {it['message']}"
         ctx = get_patch_context(patch, ln)
         ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
-        # extract Fix
         m = re.search(r'Fix:\s*```dart\n([\s\S]*?)```', ai_out)
         full_fix = m.group(1).rstrip() if m else ai_out.splitlines()[0].strip()
         summary = full_fix.splitlines()[0].strip().replace('|','\\|')
@@ -147,7 +184,6 @@ for file_path, file_issues in sorted(file_groups.items()):
         md.append('```dart')
         md.append(full_fix)
         md.append('```')
-        # Extract and append Refactor and Why
         ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
         if ref:
             md.append('**Refactor:**')
