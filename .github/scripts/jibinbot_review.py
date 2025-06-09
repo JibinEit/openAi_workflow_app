@@ -328,8 +328,9 @@ for file_path, file_issues in sorted(file_groups.items()):
     details.append((ln, full_fix, ai_out))
 
 md.append('')
-for ln, full_fix, ai_out in details:
-    md.append('<details>')
+if details:
+    for ln, full_fix, ai_out in details:
+        md.append('<details>')
     md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> — click to view</summary>')
     md.append('')
 
