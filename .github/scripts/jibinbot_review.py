@@ -32,7 +32,7 @@ changed_files = [f.filename for f in pr.get_files()
 if not changed_files:
     pr.create_issue_comment("🤖 brandOptics AI Review — no relevant code changes detected.")
     repo.get_commit(full_sha).create_status(
-        context="brandOptics AI code-review",
+        context="🔮🧠 brandOptics AI Neural Nexus Code Review",
         state="success",
         description="No relevant code changes detected."
     )
@@ -150,15 +150,41 @@ for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 
 # Header with summary
 md = [
-    '## 🤖 brandOptics AI Review Suggestions',
+    '## 🔮🧠 brandOptics AI Neural Nexus Recommendations & Code Review Suggestions',
     f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).',
     ''
 ]
+
+# Poem Section 
+poem_prompt = dedent(f"""
+Write a short, whimsical developer poem celebrating a clean code review:
+{len(issues)} issue(s) addressed across {len(file_groups)} file(s).
+Keep the tone light, inject a bit of coding humor, and make it easy to read.
+""")
+poem_resp = openai.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {"role": "system", "content": "You are a witty tech poet."},
+        {"role": "user",   "content": poem_prompt}
+    ],
+    temperature=0.7,
+    max_tokens=80
+)
+poem = poem_resp.choices[0].message.content.strip()
+
+# Append the poem in blockquote form for freshness
+md.append("---")
+md.append("> 💬 _A little verse to brighten your review:_")
+for line in poem.splitlines():
+    md.append(f"> {line}")
+md.append("---")
+
+
 for file_path, file_issues in sorted(file_groups.items()):
     md.append(f"**File =>** `{file_path}`")
     md.append('')
-    md.append('| Line | Issue | Fix (summary) |')
-    md.append('|:----:|:------|:--------------|')
+    md.append('| Line No. | Lint Rule / Error Message      | Suggested Fix (Summary)          |')
+    md.append('|:--------:|:-------------------------------|:---------------------------------|')
     gh_file = next(f for f in pr.get_files() if f.filename == file_path)
     patch = gh_file.patch or ''
     details = []
@@ -177,7 +203,7 @@ for file_path, file_issues in sorted(file_groups.items()):
     md.append('')
     for ln, full_fix, ai_out in details:
         md.append('<details>')
-        md.append(f'<summary><strong>Full fix for line {ln}</strong></summary>')
+        md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> (click to view)</summary>')
         md.append('')
         md.append('```dart')
         md.append(full_fix)
@@ -189,23 +215,70 @@ for file_path, file_issues in sorted(file_groups.items()):
             md.append('**Refactor:**')
             md.append(ref.group(1).strip())
             md.append('')
-        # Why section (single capture)
-    # Why section (non-greedy, stops at a second "Why:")
-        # why = re.search(r'Why:\s*([\s\S]*?)(?:\nWhy:|$)', ai_out)
-        # if why:
-        #      md.append('**Why:**')
-        #      md.append(why.group(1).strip())
+ 
         md.append('')
         md.append('</details>')
         md.append('')
 if not issues:
-    md.append('🎉 No issues detected. Ready to merge! 🎉')
+    # Success message
+    md.append(
+        '🧠✅ BrandOptics Neural AI Review: '
+        'No issues found—your code passes all lint checks, follows best practices, '
+        'and is performance-optimized. 🚀 Great job, developer! Ready to merge!'
+    )
+
+    # Generate a quick AI‐driven developer joke
+    joke_resp = openai.chat.completions.create(
+        model='gpt-4o-mini',
+        messages=[
+            { "role": "system", "content": "You are a witty developer assistant." },
+            { "role": "user",   "content": "Tell me a short, fun programming joke about clean code reviews." }
+        ],
+        temperature=0.8,
+        max_tokens=40
+    )
+    joke = joke_resp.choices[0].message.content.strip()
+
+    # Append the joke under the success message
+    md.append(f'💬 Joke for you: {joke}')
 
 # ── 9) POST COMMENT & STATUS ───────────────────────────────────────────
 body = '\n'.join(md)
 pr.create_issue_comment(body)
-repo.get_commit(full_sha).create_status(
-    context='brandOptics AI code-review',
+total_issues = len(issues)
+files_affected = len(file_groups)
+if issues:
+    pr.create_review(
+    body=f"""
+🧠✨ **brandOptics AI Neural Nexus**  
+Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
+
+👏 **Appreciation**  
+Thank you for your hard work—your contribution is on the right track!
+
+🔍 **Review Summary**  
+1. **Errors & Warnings**: Resolve any compile/runtime errors and lint warnings.  
+2. **Style & Conventions**: Ensure consistency in naming, formatting, and team guidelines.  
+3. **Maintainability**: Simplify complex blocks, remove dead code, and write clear comments.  
+4. **Performance & Security**: Optimize hot paths, manage resources correctly, and validate inputs.  
+5. **Testing & Documentation**: Add or update tests and inline documentation for clarity.
+
+💡 **Pro Tip**  
+Break large modules into smaller, single-responsibility components to improve readability and testability.
+
+Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
+""",
+    event="REQUEST_CHANGES"
+)
+
+    repo.get_commit(full_sha).create_status(
+        context="🔮🧠 brandOptics AI Neural Nexus Code Review",
+        state="failure",
+        description="🚧 Issues detected—please refine your code and push updates."
+    )
+else:
+    repo.get_commit(full_sha).create_status(
+    context='🔮🧠 brandOptics AI Neural Nexus Code Review',
     state='failure' if issues else 'success',
     description=('Issues detected — please refine your code.' if issues else 'No code issues detected.')
 )
