@@ -1,18 +1,4 @@
-/// The entry point of the Flutter application.
-///
-/// Runs the [MyApp] widget.
- 
-/// The root widget of the application.
-///
-/// Sets up the [MaterialApp] with a custom theme and home page.
- 
-/// The home page widget of the application.
-///
-/// Displays a counter and a button to increment it.
- 
-/// The state for [MyHomePage].
-///
-/// Manages the counter value and updates the UI when the button is pressed.
+
 import "package:flutter/material.dart";
 
 void main() => runApp(const MyApp());
@@ -45,7 +31,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   int _clickCount = 0;
 
-  /// Increments the click count and updates the UI.
+  
   void _incrementClickCount() {
     setState(() {
       _clickCount += 1;
@@ -87,13 +73,12 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
 
-// ...existing code...
 
-/// Converts a given text to its binary representation.
+
+
 String textToBinary(String text) {
   return text.runes
       .map((int rune) => rune.toRadixString(2).padLeft(8, '0'))
       .join(' ');
 }
 
-// ...existing code...

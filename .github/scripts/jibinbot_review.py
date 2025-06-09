@@ -189,7 +189,7 @@ for file_path, file_issues in sorted(file_groups.items()):
         md.append('```')
         md.append('')
         ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
-        why = re.search(r'Why:\s*([\s\S]*)', ai_out)
+        why = re.search(r'Why:\s*([\s\S]*?)(?:\nWhy:|$)', ai_out)
         if ref:
             md.append('**Refactor:**')
             md.append(ref.group(1).strip())
