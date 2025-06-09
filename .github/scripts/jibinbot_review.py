@@ -178,7 +178,6 @@ Invent a completely new, funny, over-the-top **office prank or office troll** th
 Requirements:
 - Make it DIFFERENT each time you write it
 - It can involve Developers, QA, Management, or any other team
-- It can involve code, coffee, meetings, office life, or totally absurd things
 - Keep it SHORT (max 5 lines)
 - Use plenty of fun emojis
 - Do NOT always repeat the same joke style — be creative!
