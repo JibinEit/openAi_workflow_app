@@ -103,40 +103,36 @@ if isinstance(eslint_report, list):
         if path in changed_files:
             for msg in rep.get('messages', []):
                 ln = msg.get('line')
-                if ln:
-                    issues.append({'file': path,'line': ln,
-                                   'code': msg.get('ruleId','ESLint'),
-                                   'message': msg.get('message','')})
+                if ln: issues.append({'file':path,'line':ln,
+                                      'code':msg.get('ruleId','ESLint'),
+                                      'message':msg.get('message','')})
 # Flake8
 if isinstance(flake8_report, dict):
-    for abs_path, errs in flake8_report.items():
-        path = os.path.relpath(abs_path)
+    for ap, errs in flake8_report.items():
+        path = os.path.relpath(ap)
         if path in changed_files:
-            for err in errs:
-                ln = err.get('line_number') or err.get('line')
-                if ln:
-                    issues.append({'file': path,'line': ln,
-                                   'code': err.get('code','Flake8'),
-                                   'message': err.get('text','')})
+            for e in errs:
+                ln = e.get('line_number') or e.get('line')
+                if ln: issues.append({'file':path,'line':ln,
+                                      'code':e.get('code','Flake8'),
+                                      'message':e.get('text','')})
 # ShellCheck
 if isinstance(shellcheck_report, list):
     for ent in shellcheck_report:
         path = os.path.relpath(ent.get('file',''))
         ln = ent.get('line')
-        if path in changed_files and ln:
-            issues.append({'file': path,'line': ln,
-                           'code': ent.get('code','ShellCheck'),
-                           'message': ent.get('message','')})
+        if path in changed_files and ln: issues.append({'file':path,'line':ln,
+                                                         'code':ent.get('code','ShellCheck'),
+                                                         'message':ent.get('message','')})
 # Dart Analyzer
 if isinstance(dartanalyzer_report, dict):
     for diag in dartanalyzer_report.get('diagnostics', []):
         loc = diag.get('location', {})
         path = os.path.relpath(loc.get('file',''))
         ln = loc.get('range',{}).get('start',{}).get('line')
-        if path in changed_files and ln:
-            issues.append({'file': path,'line': ln,
-                           'code': diag.get('code','DartAnalyzer'),
-                           'message': diag.get('problemMessage') or diag.get('message','')})
+        if path in changed_files and ln: issues.append({'file':path,'line':ln,
+                                                        'code':diag.get('code','DartAnalyzer'),
+                                                        'message':diag.get('problemMessage') or diag.get('message','')})
 # .NET Format
 if isinstance(dotnet_report, dict):
     diags = dotnet_report.get('Diagnostics') or dotnet_report.get('diagnostics')
@@ -144,20 +140,18 @@ if isinstance(dotnet_report, dict):
         for d in diags:
             path = os.path.relpath(d.get('Path') or d.get('path',''))
             ln = d.get('Region',{}).get('StartLine')
-            if path in changed_files and ln:
-                issues.append({'file': path,'line': ln,
-                               'code':'DotNetFormat',
-                               'message': d.get('Message','')})
+            if path in changed_files and ln: issues.append({'file':path,'line':ln,
+                                                           'code':'DotNetFormat',
+                                                           'message':d.get('Message','')})
 
 # ── 8) GROUP AND FORMAT OUTPUT ─────────────────────────────────────────
 file_groups = {}
-for issue in issues:
-    file_groups.setdefault(issue['file'], []).append(issue)
+for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 
 # Header with summary
 md = [
     '## 🤖 brandOptics AI Review Suggestions',
-    f'**Summary:** {len(issues)} issues found across {len(file_groups)} files.',
+    f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).',
     ''
 ]
 for file_path, file_issues in sorted(file_groups.items()):
@@ -176,7 +170,8 @@ for file_path, file_issues in sorted(file_groups.items()):
         m = re.search(r'Fix:\s*```dart\n([\s\S]*?)```', ai_out)
         full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
         lines = full_fix.splitlines()
-        summary = ' '.join(lines[:2]).strip().replace('|','\\|')
+        # richer summary: first three lines
+        summary = ' '.join(lines[:3]).replace('|','\\|')
         md.append(f"| {ln} | {issue_md} | `{summary}` |")
         details.append((ln, full_fix, ai_out))
     md.append('')
@@ -188,12 +183,14 @@ for file_path, file_issues in sorted(file_groups.items()):
         md.append(full_fix)
         md.append('```')
         md.append('')
+        # Refactor section
         ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
-        why = re.search(r'Why:\s*([\s\S]*?)(?:\nWhy:|$)', ai_out)
         if ref:
             md.append('**Refactor:**')
             md.append(ref.group(1).strip())
             md.append('')
+        # Why section (single capture)
+        why = re.search(r'Why:\s*([\s\S]*?)(?:\nWhy:|$)', ai_out)
         if why:
             md.append('**Why:**')
             md.append(why.group(1).strip())
