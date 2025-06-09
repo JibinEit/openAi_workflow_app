@@ -171,14 +171,14 @@ troll_resp = openai.chat.completions.create(
         {"role": "user",   "content": troll_prompt}
     ],
     temperature=0.7,
-    max_tokens=80
+    max_tokens=200
 )
 troll = troll_resp.choices[0].message.content.strip()
 
 md.append("---")
-md.append("--> 🎭 Prank War Dispatch:--")
+md.append("> 🎭 _Prank War Dispatch:_")    # ← use '>' for blockquotes
 for line in troll.splitlines():
-    md.append(f"> {line}")
+    md.append(f"> {line}")                # each line must also start with '>'
 md.append("---")
 
 
