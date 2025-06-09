@@ -1,7 +1,7 @@
 class Something {
    Something(this.name, this.value);
   final String name;
-  final int b;
+  final int value;
   @override
   String toString() => "Something(name: $name, value: $value)";
 }
