@@ -7,4 +7,9 @@ class SampleClass {
 
   @override
   String toString() => "SampleClass(a: $a, b: $b, age: $age)";
+
+  Future<void> domething() async {
+    await delayed;
+    print("Doing something with $a and $b at age $age");
+  }
 }
