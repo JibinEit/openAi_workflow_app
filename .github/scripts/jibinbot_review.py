@@ -413,6 +413,11 @@ if issues:
         description="Issues detected—please refine your code and push updates."
     )
 else:
+     # Approve the PR to remove block
+    pr.create_review(
+        body="✅ Code passed all checks. Approved for merge.",
+        event="APPROVE"
+    )
     repo.get_commit(full_sha).create_status(
     context='brandOptics AI Neural Nexus Code Review',
     state='failure' if issues else 'success',
