@@ -260,8 +260,9 @@ md.append('')
 # Blank line between title and summary
 md.append('## Recommendations & Review Suggestions')
 md.append('')
+md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s) in this PR')
+md.append('')
 md.append("""
-Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
 Thanks for your contribution! A few tweaks are needed before we can merge.
 
 🔍 **Key Findings**  
@@ -302,13 +303,13 @@ troll_resp = openai.chat.completions.create(
 )
 troll = troll_resp.choices[0].message.content.strip()
 
-md.append("---")
+ 
 md.append("> 🎭 _Prank War Dispatch:_")    # ← use '>' for blockquotes
 for line in troll.splitlines():
     md.append(f"> {line}")                # each line must also start with '>'
-md.append("---")
+ 
 md.append('## 📂 File-wise Issue Breakdown & AI Suggestions')
-md.append("---")
+ 
 details = []  
 for file_path, file_issues in sorted(file_groups.items()):
     md.append(f"**File =>** `{file_path}`")
