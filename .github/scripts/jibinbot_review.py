@@ -383,7 +383,7 @@ md.append('')
 if details:
     for ln, full_fix, ai_out in details:
         md.append('<details>')
-    md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> — click to view</summary>')
+    md.append(f'<summary><strong>📎 Line {ln} – AI Suggestions & Code Insights</strong> (click to expand)</summary>')
     md.append('')
 
     # Use f-string here so {fence} is replaced
