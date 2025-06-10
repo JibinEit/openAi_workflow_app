@@ -416,7 +416,7 @@ if not issues:
     md.append('- 🏷️ **Title:** Code Maestro')
     md.append('- ⭐⭐⭐⭐⭐')
     md.append('- ✨ **Summary:** Clean, efficient, and merge-ready! Keep up the solid work! 💪🔥')
-    md.append('---')
+    
     # 5) another blank line before whatever comes next
     md.append('')
     # Generate a quick AI‐driven developer joke
