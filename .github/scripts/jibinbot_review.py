@@ -412,9 +412,9 @@ if not issues:
     md.append('---')
     md.append('**🏅 Developer Performance Rating**')
     md.append('')
-    md.append('- 👤 **Developer:** @{dev_name}')  # Replace {dev_name} dynamically if possible
+    md.append(f'- 👤 **Developer:** @{dev_name}')
     md.append('- 🏷️ **Title:** Code Maestro')
-    md.append('- ⭐ **Rating:** 5/5 Stars')
+    md.append('- ⭐⭐⭐⭐⭐')
     md.append('- ✨ **Summary:** Clean, efficient, and merge-ready! Keep up the solid work! 💪🔥')
     md.append('---')
     # 5) another blank line before whatever comes next
