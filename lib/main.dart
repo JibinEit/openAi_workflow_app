@@ -3,6 +3,7 @@ import "package:flutter/material.dart";
 
 void main() => runApp(const MyApp());
 
+ 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -56,8 +57,17 @@ class _MyHomePageState extends State<MyHomePage> {
               _clickCount.toString(),
             ),
             Text(
-              "$_clickCount",
+              "$_clickCount", 
               style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            Row(
+              children: <Widget>[
+                const Text("Hello World in Binary: "),
+                Text(
+                  textToBinary("Hello World"),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
             ),
           ],
         ),
