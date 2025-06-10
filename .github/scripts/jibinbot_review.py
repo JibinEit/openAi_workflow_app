@@ -42,7 +42,20 @@ img_url = (
 changed_files = [f.filename for f in pr.get_files()
                  if f.patch and not f.filename.lower().startswith('.github/')]
 if not changed_files:
-    pr.create_issue_comment("🔮🧠 brandOptics AI Neural Nexus Review — no relevant code changes detected.")
+    pr.create_issue_comment(dedent(f"""
+<img src="{img_url}" width="100" height="100" />
+
+# brandOptics AI Neural Nexus
+
+## Review: ✅ No Relevant Changes Detected
+
+No actionable code changes were found in this PR.  
+Everything looks quiet on the commit front — nothing to analyze right now. 😌
+
+💡 **Note**  
+Make sure your changes include source code updates (excluding config/docs only) to trigger a meaningful review.
+
+"""))
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI Neural Nexus Code Review",
         state="success",
