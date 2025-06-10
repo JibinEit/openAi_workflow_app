@@ -407,9 +407,16 @@ if not issues:
     md.append('')
     md.append('# brandOptics Neural AI Review:')
     md.append('')
- 
     md.append('**No issues found—your code** passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
-
+    md.append('')
+    md.append('---')
+    md.append('**🏅 Developer Performance Rating**')
+    md.append('')
+    md.append('- 👤 **Developer:** @{dev_name}')  # Replace {dev_name} dynamically if possible
+    md.append('- 🏷️ **Title:** Code Maestro')
+    md.append('- ⭐ **Rating:** 5/5 Stars')
+    md.append('- ✨ **Summary:** Clean, efficient, and merge-ready! Keep up the solid work! 💪🔥')
+    md.append('---')
     # 5) another blank line before whatever comes next
     md.append('')
     # Generate a quick AI‐driven developer joke
