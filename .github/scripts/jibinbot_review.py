@@ -415,7 +415,28 @@ if issues:
 else:
      # Approve the PR to remove block
     pr.create_review(
-        body="✅ Code passed all checks. Approved for merge.",
+         body=dedent(f"""
+            <img src="{img_url}" width="100" height="100" /> 
+
+            # brandOptics AI Neural Nexus  
+
+            ## ✅ Review: All Clear!
+
+            No issues detected — your code passed all checks, lint validations, and best practice scans. 🧠✨  
+            Everything looks clean, performant, and production-ready.
+
+            🔍 **What Was Checked**  
+            - ✅ Compilation & Linting  
+            - ✅ Naming, Style & Formatting  
+            - ✅ Readability & Code Clarity  
+            - ✅ Performance & Security Considerations  
+            - ✅ Documentation & Test Coverage  
+
+            💡 **Nice Work**  
+            This is a solid PR — clean, structured, and merge-ready. 🚀
+
+            _Approved automatically by brandOptics AI Neural Nexus._
+"""),
         event="APPROVE"
     )
     repo.get_commit(full_sha).create_status(
