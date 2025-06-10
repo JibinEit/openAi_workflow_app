@@ -12,6 +12,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
 REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
 EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
+
 if not OPENAI_API_KEY or not GITHUB_TOKEN:
     print("⛔️ Missing OpenAI or GitHub token.")
     exit(1)
@@ -27,7 +28,7 @@ repo      = gh.get_repo(REPO_NAME)
 pr        = repo.get_pull(pr_number)
 # right after you do:
 repo      = gh.get_repo(REPO_NAME)
-
+dev_name = event["pull_request"]["user"]["login"]
 # ── Insert logo at top of comment ────────────────────────────────────
 # get the default branch (usually "main" or "master")
 default_branch = repo.default_branch
@@ -161,6 +162,27 @@ Why:
     )
     return resp.choices[0].message.content.strip()
 
+rating_prompt = dedent(f"""
+Evaluate the pull request submitted by @{dev_name} based on code cleanliness, lint adherence, readability, and overall developer spirit. 
+Respond with:
+- A creative title (like "Code Ninja", "Syntax Sorcerer", etc.)
+- A rating out of 5 ⭐️  no need of half stars 
+- A one-liner review summary with emojis
+
+Be fair but fun — this is for developer motivation!
+""")
+rating_resp = openai.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {"role": "system", "content": "You are a playful yet insightful code reviewer."},
+        {"role": "user",   "content": rating_prompt}
+    ],
+    temperature=0.8,
+    max_tokens=120
+)
+rating = rating_resp.choices[0].message.content.strip()
+
+
 # ── 7) COLLECT ISSUES ──────────────────────────────────────────────────
 issues = []
 # ESLint
@@ -261,7 +283,11 @@ md.append('')
 md.append('## Recommendations & Review Suggestions')
 md.append('')
 md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s) in this PR')
-md.append('')
+md.append("---")
+md.append(f"> 🧑‍💻 _Developer Rating for @{dev_name}_")
+for line in rating.splitlines():
+    md.append(f"> {line}")
+md.append("---")
 md.append("""
 Thanks for your contribution! A few tweaks are needed before we can merge.
 
