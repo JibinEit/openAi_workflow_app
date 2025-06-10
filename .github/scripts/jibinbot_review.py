@@ -29,6 +29,16 @@ pr        = repo.get_pull(pr_number)
 # right after you do:
 repo      = gh.get_repo(REPO_NAME)
 dev_name = event["pull_request"]["user"]["login"]
+title        = event["pull_request"]["title"]
+body         = event["pull_request"]["body"] or "No description provided."
+url          = event["pull_request"]["html_url"]
+source_branch = event["pull_request"]["head"]["ref"]
+target_branch = event["pull_request"]["base"]["ref"]
+created_at   = event["pull_request"]["created_at"]
+commits      = event["pull_request"]["commits"]
+additions    = event["pull_request"]["additions"]
+deletions    = event["pull_request"]["deletions"]
+changed_files= event["pull_request"]["changed_files"]
 # ── Insert logo at top of comment ────────────────────────────────────
 # get the default branch (usually "main" or "master")
 default_branch = repo.default_branch
@@ -293,13 +303,34 @@ md.append('# brandOptics AI Neural Nexus')
 md.append('')
  
 # Blank line between title and summary
-md.append('## Recommendations & Review Suggestions')
-md.append('')
-md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s) in this PR')
+md.append("## 📌 Recommendations & Review Summary")
+md.append("")
+md.append(f"**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s) in this PR.")
+md.append("")
+
+# Developer Rating
 md.append("---")
-md.append(f"> 🧑‍💻 _Developer Rating for @{dev_name}_")
+md.append(f"> 🧑‍💻 **Developer Rating for @{dev_name}**")
 for line in rating.splitlines():
     md.append(f"> {line}")
+md.append("---")
+
+# PR Details
+md.append("### 📋 Pull Request Metadata")
+md.append("")
+md.append(f"- 🆔 **Title:** {title}")
+md.append(f"- 🔗 **PR Link:** [#{pr_number}]({url})")
+md.append(f"- 👤 **Author:** @{dev_name}")
+md.append(f"- 🌿 **Branch:** `{source_branch}` → `{target_branch}`")
+md.append(f"- 🗓️ **Opened On:** {created_at}")
+md.append("")
+
+# Change Statistics
+md.append("### 📊 Change Statistics")
+md.append(f"- 🧾 **Commits:** {commits}")
+md.append(f"- ➕ **Lines Added:** {additions}")
+md.append(f"- ➖ **Lines Removed:** {deletions}")
+md.append(f"- 📄 **Files Changed:** {changed_files}")
 md.append("---")
 md.append("""
 Thanks for your contribution! A few tweaks are needed before we can merge.
@@ -409,6 +440,22 @@ if not issues:
     md.append('')
     md.append('**No issues found—your code** passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
     md.append('')
+    # PR Details
+    md.append("### 📋 Pull Request Metadata")
+    md.append("")
+    md.append(f"- 🆔 **Title:** {title}")
+    md.append(f"- 🔗 **PR Link:** [#{pr_number}]({url})")
+    md.append(f"- 👤 **Author:** @{dev_name}")
+    md.append(f"- 🌿 **Branch:** `{source_branch}` → `{target_branch}`")
+    md.append(f"- 🗓️ **Opened On:** {created_at}")
+    md.append("")
+
+    # Change Statistics
+    md.append("### 📊 Change Statistics")
+    md.append(f"- 🧾 **Commits:** {commits}")
+    md.append(f"- ➕ **Lines Added:** {additions}")
+    md.append(f"- ➖ **Lines Removed:** {deletions}")
+    md.append(f"- 📄 **Files Changed:** {changed_files}")
     md.append('---')
     md.append('**🏅 Developer Performance Rating**')
     md.append('')
