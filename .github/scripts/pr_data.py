@@ -29,3 +29,7 @@ img_url = (
     f"https://raw.githubusercontent.com/"
     f"{repo.full_name}/{default_branch}/.github/assets/bailogo.png"
 )
+
+# Add empty placeholders for issues and file_groups
+issues = []
+file_groups = {}

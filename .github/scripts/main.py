@@ -1,5 +1,5 @@
 from config import repo
-from pr_data import pr, changed_files, full_sha
+from pr_data import pr, changed_files, issues, file_groups, full_sha
 from issue_collector import collect_issues
 from markdown_builder import build_markdown
 

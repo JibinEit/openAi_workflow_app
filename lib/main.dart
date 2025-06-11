@@ -38,7 +38,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(final BuildContext context) => Scaffold(
-    backgroundColor: Colors.red,
+    backgroundColor: Colors.grey,
         appBar: AppBar(
           backgroundColor: () {
             final Color inversePrimaryColor =
