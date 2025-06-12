@@ -539,9 +539,22 @@ if not issues:
     md.append("---")
     md.append("### 🏅 Developer Performance Rating")
     md.append("")
-    for line in rating.splitlines():
-        md.append(f"- {line}")
-    md.append("")
+    md.append(">") # Start the blockquote
+    # Split the rating into its components if possible, or just iterate lines
+    rating_lines = rating.splitlines()
+
+    if rating_lines:
+        md.append(f"> **{rating_lines[0]}**") # Bold the title
+        if len(rating_lines) > 1:
+            md.append(f"> {rating_lines[1]}") # The stars line
+        if len(rating_lines) > 2:
+            # Join the rest of the lines with a space for the summary, or keep them separate
+            # For a more compact summary, you might join them.
+            md.append(f"> {rating_lines[2]}") # The summary message
+            for i in range(3, len(rating_lines)): # In case the AI generates more lines
+                md.append(f"> {rating_lines[i]}")
+
+    md.append("") # End the blockquote
     # Generate a quick AI‐driven developer joke
     joke_resp = openai.chat.completions.create(
         model='gpt-4o-mini',
