@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import json
 import re
@@ -5,7 +6,6 @@ from pathlib import Path
 from textwrap import dedent
 import openai
 from github import Github
-from textwrap import dedent
 
 # ── 1) SETUP ──────────────────────────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -37,21 +37,19 @@ created_at   = event["pull_request"]["created_at"]
 commits      = event["pull_request"]["commits"]
 additions    = event["pull_request"]["additions"]
 deletions    = event["pull_request"]["deletions"]
-# Note: changed_files from event is just a count, we need the list from pr.get_files()
-# This variable is correctly redefined later.
 
 # ── Insert logo at top of comment ────────────────────────────────────
-# get the default branch (usually "main" or "master")
 default_branch = repo.default_branch
 
-# build the raw.githubusercontent URL to your asset
+# Ensure the image URL is correct and points to the raw content of the default branch
+# Make sure the file exists at .github/assets/bailogo.png in your repo's default branch
+# And that your repository is public or the image is accessible.
 img_url = (
     f"[https://raw.githubusercontent.com/](https://raw.githubusercontent.com/)"
     f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
 )
 
 # ── 3) DETECT CHANGED FILES (exclude .github/) ─────────────────────────
-# Get actual changed files from the PR object, filtering out .github/
 changed_files_list = [f.filename for f in pr.get_files()
                       if f.patch and not f.filename.lower().startswith('.github/')]
 
@@ -67,7 +65,7 @@ No actionable code changes were found in this PR.
 Everything looks quiet on the commit front — nothing to analyze right now. 😌
 
 💡 **Note**
-Make sure your changes include source code updates (excluding config/docs only) to trigger a a meaningful review.
+Make sure your changes include source code updates (excluding config/docs only) to trigger a meaningful review.
 """))
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI Neural Nexus Code Review",
@@ -80,7 +78,7 @@ Make sure your changes include source code updates (excluding config/docs only) 
 def load_json(path: Path):
     try:
         return json.loads(path.read_text())
-    except:
+    except Exception: # Catch any exception during JSON loading
         return None
 
 reports_dir = Path('.github/linter-reports')
@@ -96,35 +94,38 @@ stylelint_report     = load_json(reports_dir / 'stylelint.json')
 def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
     """Extracts a contextual snippet from a patch around a specific line number."""
     file_line = None
-    hunk_lines = []
+    final_context_lines = []
+    
     for line in patch.splitlines():
         if line.startswith('@@ '):
-            # Parse the hunk header to find the starting line number in the new file
-            # Example: @@ -1,7 +1,7 @@
+            final_context_lines.append(line)
             match = re.match(r'@@ -\d+,\d+ \+(\d+),\d+ @@', line)
             if match:
-                file_line = int(match.group(1)) - 1 # Adjust for 0-based indexing if needed, or 1-based for display
-                hunk_lines = [line] # Include the hunk header itself
+                file_line = int(match.group(1)) # 1-indexed for comparison
             else:
-                file_line = None # Reset if header format is unexpected
+                file_line = None
             continue
 
         if file_line is not None:
             prefix = line[0]
-            # Increment file_line for lines that are part of the new file (additions or context)
+            # Check if the current line is within the desired context
+            # Include lines that are additions (+) or context ( ) within the window
+            # Also include deletions (-) if they are within the context window
+            if prefix in (' ', '+') and abs(file_line - line_no) <= ctx:
+                final_context_lines.append(line)
+            elif prefix == '-' and (file_line >= line_no - ctx and file_line <= line_no + ctx):
+                final_context_lines.append(line)
+            
+            # Increment file_line only for lines that exist in the new file (context or additions)
             if prefix in (' ', '+'):
                 file_line += 1
-
-            # Check if the current line is within the desired context
-            if abs(file_line - line_no) <= ctx or (line_no == file_line and prefix == '-'):
-                 hunk_lines.append(line)
-            # Stop if we've passed the context window
+            
+            # Stop if we've passed the context window for lines that exist in the new file
             if file_line > line_no + ctx and prefix not in ('-', '+'):
-                break
-            # Special case for lines that are deletions before the target line
-            if file_line > line_no + ctx and prefix == '-': # this handles if a deletion happens to be just after a suggested context
-                 break
-    return '\n'.join(hunk_lines)
+                break # Break if we are past the context and not looking at a pending deletion/addition
+
+    return '\n'.join(final_context_lines)
+
 
 # ── LANGUAGE DETECTION ───────────────────────────────────────────────────
 def detect_language(file_path: str) -> str:
@@ -144,6 +145,7 @@ def detect_language(file_path: str) -> str:
         '.css':        'CSS',
         '.scss':       'SCSS/Sass',
         '.less':       'Less',
+        '.sh':         'Shell', # Added for ShellCheck
         # add more as needed…
     }.get(ext, 'general programming')
 
@@ -160,6 +162,7 @@ FENCE_BY_LANG = {
     'CSS':              'css',
     'SCSS/Sass':        'scss',
     'Less':             'less',
+    'Shell':            'sh',
     'general programming': '' # Default to no specific fence if unknown
 }
 
@@ -249,17 +252,9 @@ for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 # ── 6) AI SUGGESTION ───────────────────────────────────────────────────
 def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int, issue_message: str) -> str:
     lang = detect_language(file_path)
-    # Extract the relevant original code snippet from the patch context
-    # This requires a bit of careful parsing of the patch to get lines without '+' or '-'
-    original_code_lines = []
-    for line in patch_ctx.splitlines():
-        if line.startswith(' ') or line.startswith('-'): # Context or removed lines
-            original_code_lines.append(line[1:]) # Remove the prefix
-        elif line.startswith('@@'):
-            original_code_lines.append(line) # Include hunk header
+    fence = FENCE_BY_LANG.get(lang, '') # Get the appropriate fence
 
-    original_code_snippet = "\n".join(original_code_lines)
-
+    # Provide stronger instructions for AI to always include the language fence
     prompt = dedent(f"""
     You are a highly experienced {lang} code reviewer and software architect.
     Your task is to analyze the provided code context and a reported issue, then provide a detailed, actionable suggestion for improvement.
@@ -275,13 +270,25 @@ def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int, issu
     {patch_ctx}
     ```
 
-    Please provide your analysis and suggestions in exactly three labeled sections:
+    Please provide your analysis and suggestions in exactly three labeled sections.
+    **Crucially, ensure the 'Suggested Fix' section includes a code block formatted with triple backticks and the correct language identifier immediately after the opening backticks (e.g., ```{fence}\n...code...\n```).**
+    If showing original and corrected code, keep it within a single code block.
 
     **Analysis:**
     Provide a concise explanation of the root cause of the issue, and elaborate on any other potential issues you identify within the provided code context (e.g., performance, security, maintainability, naming conventions, adherence to {lang} best practices).
 
     **Suggested Fix:**
-    Provide a copy-friendly code snippet for the corrected code. This snippet should include the lines that need to be changed, and if applicable, a few lines of surrounding context for clarity. Use appropriate code fences for `{lang}`. If the change involves modifying an existing line, clearly show the original line and the corrected line.
+    Provide a copy-friendly code snippet for the corrected code. This snippet should include the lines that need to be changed, and if applicable, a few lines of surrounding context for clarity.
+    **Remember to use the correct language fence like `{fence}` immediately after the opening triple backticks, e.g., ```{fence}**.
+    Example format:
+    ```{fence}
+    // Original:
+    // old code line 1
+    // old code line 2
+    // Corrected:
+    new code line 1
+    new code line 2
+    ```
 
     **Rationale:**
     Briefly explain *why* your suggested fix is better, covering aspects like readability, performance, adherence to best practices, or security improvements.
@@ -298,7 +305,7 @@ def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int, issu
         messages=[{'role':'system','content':system_prompt},
                   {'role':'user','content':prompt}],
         temperature=0.1, # Keep temperature low for more deterministic and accurate fixes
-        max_tokens=600 # Increased tokens to allow for more detailed responses
+        max_tokens=700 # Increased tokens to allow for more detailed responses
     )
     return resp.choices[0].message.content.strip()
 
@@ -355,7 +362,7 @@ for line in rating.splitlines():
 
 md.append("---")
 # PR Details
-md.append("###  Pull Request Metadata") # Corrected typo: "Pull"
+md.append("### Pull Request Metadata")
 md.append("")
 md.append(f"- **Title:** {title}")
 md.append(f"- **PR Link:** [#{pr_number}]({url})")
@@ -437,33 +444,47 @@ for file_path, file_issues in sorted(file_groups.items()):
             ln = it['line']
             issue_md = f"`{it['code']}`: {it['message']}"
             ctx = get_patch_context(patch, ln)
-            # Pass the issue message to the AI suggestion function
             ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln, it['message'])
 
-            # 1) determine fence based on file_path
             lang = detect_language(file_path)
             fence = FENCE_BY_LANG.get(lang, '')
 
-            # Extract sections from AI output using more flexible regex
-            # This regex is more tolerant of newlines and optional language hints after ```
+            # --- TWO-STAGE EXTRACTION FOR SUGGESTED FIX ---
+            analysis_content = "No specific analysis provided."
+            full_fix_content = "No suggested fix snippet provided."
+            rationale_content = "No rationale provided."
+
+            # Stage 1: Extract sections based on headers
             analysis_match = re.search(r'^\*\*Analysis:\*\*\s*\n([\s\S]*?)(?=\n\*\*Suggested Fix:\*\*|$)', ai_out, re.MULTILINE)
+            if analysis_match:
+                analysis_content = analysis_match.group(1).strip()
+
+            suggested_fix_section_match = re.search(r'^\*\*Suggested Fix:\*\*\s*\n([\s\S]*?)(?=\n\*\*Rationale:\*\*|$)', ai_out, re.MULTILINE)
             
-            # --- IMPROVED REGEX FOR SUGGESTED FIX ---
-            suggested_fix_match = re.search(
-                r'^\*\*Suggested Fix:\*\*\s*\n```(?:.*?)\n([\s\S]*?)```(?=\n\*\*Rationale:\*\*|$)',
-                ai_out, re.MULTILINE
-            )
-            # --- END IMPROVED REGEX ---
-
+            if suggested_fix_section_match:
+                # Stage 2: Within the "Suggested Fix" section, find the code block
+                suggested_fix_section_text = suggested_fix_section_match.group(1).strip()
+                code_block_match = re.search(r'```(?:\w*\n)?([\s\S]*?)```', suggested_fix_section_text)
+                if code_block_match:
+                    full_fix_content = code_block_match.group(1).strip()
+                else:
+                    # Fallback: if no code block found, use the raw text content as the fix
+                    full_fix_content = suggested_fix_section_text # Use the entire section text
+                    # Limit to first few lines if it's too long
+                    if len(full_fix_content.splitlines()) > 10:
+                        full_fix_content = '\n'.join(full_fix_content.splitlines()[:10]) + '\n...'
+            
             rationale_match = re.search(r'^\*\*Rationale:\*\*\s*\n([\s\S]*?)(?=$)', ai_out, re.MULTILINE)
+            if rationale_match:
+                rationale_content = rationale_match.group(1).strip()
+            # --- END TWO-STAGE EXTRACTION ---
 
-            analysis_content = analysis_match.group(1).strip() if analysis_match else "No specific analysis provided."
-            full_fix_content = suggested_fix_match.group(1).strip() if suggested_fix_match else "No suggested fix snippet provided."
-            rationale_content = rationale_match.group(1).strip() if rationale_match else "No rationale provided."
 
             # Use the first few lines of the fix as a summary for the table
             summary_lines = full_fix_content.splitlines()[:3]
-            summary = ' '.join(summary_lines).replace('|','\\|') + ('...' if len(full_fix_content.splitlines()) > 3 else '')
+            summary = ' '.join(summary_lines).replace('|','\\|') # Escape pipes for markdown table
+            if len(full_fix_content.splitlines()) > 3 or (len(summary_lines) == 1 and len(summary) > 50): # Add "..." if summary is too long
+                summary += '...'
 
             md.append(f"| {ln} | {issue_md} | `{summary}` |")
             details_for_file.append({
@@ -484,6 +505,7 @@ for file_path, file_issues in sorted(file_groups.items()):
             md.append(f'**Analysis:**\n{detail["analysis"]}')
             md.append('')
             md.append(f'**Suggested Fix:**')
+            # Always wrap in code blocks for consistency, even if AI provided them
             md.append(f'```{detail["fence"]}')
             md.append(detail["full_fix"])
             md.append('```')
@@ -502,7 +524,7 @@ if not issues:
     md.append('')
     md.append('# brandOptics AI Neural Nexus Review: All Clear! ✨')
     md.append('')
-    md.append('Congratulations, @{dev_name}! Your Pull Request has successfully passed all automated code quality checks. Your code is clean, adheres to best practices, and is optimized for performance. 🚀')
+    md.append(f'Congratulations, @{dev_name}! Your Pull Request has successfully passed all automated code quality checks. Your code is clean, adheres to best practices, and is optimized for performance. 🚀')
     md.append('')
     md.append('---')
     md.append("### Pull Request Metadata")
@@ -522,9 +544,6 @@ if not issues:
     md.append('---')
     md.append('**🏅 Developer Performance Rating**')
     md.append('')
-    # Use the rating AI generated for the success case too, ensure it's positive.
-    # We might want a separate prompt for "success" rating if the existing one can sometimes be harsh.
-    # For now, let's assume it will be positive if there are 0 issues.
     for line in rating.splitlines():
         md.append(f'- {line}')
     md.append('')
@@ -546,8 +565,17 @@ if not issues:
 
 
 # ── 9) POST COMMENT & STATUS ───────────────────────────────────────────
-body = '\n'.join(md)
-pr.create_issue_comment(body)
+final_comment_body = '\n'.join(md)
+try:
+    pr.create_issue_comment(final_comment_body)
+    print(f"Posted AI review for PR #{pr_number}")
+except Exception as e:
+    print(f"Error posting comment to PR #{pr_number}: {e}")
+    # Fallback to outputting the comment body to stdout for debugging in CI
+    print("\n--- Generated Comment Body (for debugging) ---")
+    print(final_comment_body)
+    print("---------------------------------------------")
+
 total_issues = len(issues)
 
 # Set commit status
@@ -556,4 +584,3 @@ repo.get_commit(full_sha).create_status(
     state='failure' if issues else 'success',
     description=('Issues detected—please refine your code and push updates.' if issues else 'No code issues detected. Ready for merge!')
 )
-print(f"Posted AI review for PR #{pr_number}")
