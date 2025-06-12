@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import os
 import json
 import re
@@ -6,8 +7,9 @@ from pathlib import Path
 from textwrap import dedent
 import openai
 from github import Github
-from textwrap import dedent
+
 # ── 1) SETUP ──────────────────────────────────────────────────────────
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
 REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
@@ -16,41 +18,38 @@ EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
 if not OPENAI_API_KEY or not GITHUB_TOKEN:
     print("⛔️ Missing OpenAI or GitHub token.")
     exit(1)
+
 openai.api_key = OPENAI_API_KEY
 gh = Github(GITHUB_TOKEN)
 
 # ── 2) LOAD PR DATA ────────────────────────────────────────────────────
+
 with open(EVENT_PATH) as f:
     event = json.load(f)
-pr_number = event["pull_request"]["number"]
-full_sha  = event["pull_request"]["head"]["sha"]
-repo      = gh.get_repo(REPO_NAME)
-pr        = repo.get_pull(pr_number)
-# right after you do:
-repo      = gh.get_repo(REPO_NAME)
-dev_name = event["pull_request"]["user"]["login"]
-title        = event["pull_request"]["title"]
-body         = event["pull_request"]["body"] or "No description provided."
-url          = event["pull_request"]["html_url"]
+
+pr_number     = event["pull_request"]["number"]
+repo          = gh.get_repo(REPO_NAME)
+pr            = repo.get_pull(pr_number)
+dev_name      = event["pull_request"]["user"]["login"]
+title         = event["pull_request"]["title"]
+body          = event["pull_request"]["body"] or "No description provided."
+url           = event["pull_request"]["html_url"]
 source_branch = event["pull_request"]["head"]["ref"]
 target_branch = event["pull_request"]["base"]["ref"]
-created_at   = event["pull_request"]["created_at"]
-commits      = event["pull_request"]["commits"]
-additions    = event["pull_request"]["additions"]
-deletions    = event["pull_request"]["deletions"]
-changed_files= event["pull_request"]["changed_files"]
-# ── Insert logo at top of comment ────────────────────────────────────
-# get the default branch (usually "main" or "master")
-default_branch = repo.default_branch
+created_at    = event["pull_request"]["created_at"]
+commits       = event["pull_request"]["commits"]
+additions     = event["pull_request"]["additions"]
+deletions     = event["pull_request"]["deletions"]
+changed_files_list = event["pull_request"]["changed_files"]
 
-# build the raw.githubusercontent URL to your asset
-img_url = (
-    f"https://raw.githubusercontent.com/"
-    f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
-)
-# ── 3) DETECT CHANGED FILES (exclude .github/) ─────────────────────────
-changed_files = [f.filename for f in pr.get_files()
-                 if f.patch and not f.filename.lower().startswith('.github/')]
+# ── Insert logo ────────────────────────────────────────────────────────
+
+default_branch = repo.default_branch
+img_url        = f"https://raw.githubusercontent.com/{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
+
+# ── 3) DETECT CHANGED FILES ────────────────────────────────────────────
+
+changed_files = [f.filename for f in pr.get_files() if f.patch and not f.filename.lower().startswith('.github/')]
 if not changed_files:
     pr.create_issue_comment(dedent(f"""
 <img src="{img_url}" width="100" height="100" />
@@ -64,9 +63,8 @@ Everything looks quiet on the commit front — nothing to analyze right now. �
 
 💡 **Note**  
 Make sure your changes include source code updates (excluding config/docs only) to trigger a meaningful review.
-
 """))
-    repo.get_commit(full_sha).create_status(
+    repo.get_commit(pr.head.sha).create_status(
         context="brandOptics AI Neural Nexus Code Review",
         state="success",
         description="No relevant code changes detected."
@@ -74,20 +72,24 @@ Make sure your changes include source code updates (excluding config/docs only) 
     exit(0)
 
 # ── 4) LOAD LINTER REPORTS ─────────────────────────────────────────────
+
 def load_json(path: Path):
     try:
         return json.loads(path.read_text())
     except:
         return None
-reports_dir = Path('.github/linter-reports')
-eslint_report        = load_json(reports_dir / 'eslint.json')
-flake8_report        = load_json(reports_dir / 'flake8.json')
-shellcheck_report    = load_json(reports_dir / 'shellcheck.json')
-dartanalyzer_report  = load_json(reports_dir / 'dartanalyzer.json')
-dotnet_report        = load_json(reports_dir / 'dotnet-format.json')
-htmlhint_report   = load_json(reports_dir / 'htmlhint.json')
-stylelint_report  = load_json(reports_dir / 'stylelint.json')
+
+reports_dir         = Path('.github/linter-reports')
+eslint_report       = load_json(reports_dir / 'eslint.json')
+flake8_report       = load_json(reports_dir / 'flake8.json')
+shellcheck_report   = load_json(reports_dir / 'shellcheck.json')
+dartanalyzer_report = load_json(reports_dir / 'dartanalyzer.json')
+dotnet_report       = load_json(reports_dir / 'dotnet-format.json')
+htmlhint_report     = load_json(reports_dir / 'htmlhint.json')
+stylelint_report    = load_json(reports_dir / 'stylelint.json')
+
 # ── 5) HELPERS ─────────────────────────────────────────────────────────
+
 def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
     file_line = None
     hunk = []
@@ -103,45 +105,27 @@ def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
                 if abs(file_line - line_no) <= ctx: hunk.append(line)
                 if file_line > line_no + ctx: break
     return '\n'.join(hunk)
-# ── LANGUAGE DETECTION ───────────────────────────────────────────────────
+
 def detect_language(file_path: str) -> str:
     ext = Path(file_path).suffix.lower()
     return {
-        '.dart':       'Dart/Flutter',
-        '.ts':         'TypeScript/Angular',
-        '.js':         'JavaScript/React',
-        '.jsx':        'JavaScript/React',
-        '.tsx':        'TypeScript/React',
-        '.py':         'Python',
-        '.java':       'Java',
-        '.cs':         '.NET C#',
-        '.go':         'Go',
-        '.html':       'HTML',
-        '.htm':        'HTML',
-        '.css':        'CSS',
-        '.scss':       'SCSS/Sass',
-        '.less':       'Less',
-        # add more as needed…
+        '.dart': 'Dart/Flutter', '.ts': 'TypeScript/Angular', '.js': 'JavaScript/React',
+        '.jsx': 'JavaScript/React', '.tsx': 'TypeScript/React', '.py': 'Python',
+        '.java': 'Java', '.cs': '.NET C#', '.go': 'Go', '.html': 'HTML',
+        '.htm': 'HTML', '.css': 'CSS', '.scss': 'SCSS/Sass', '.less': 'Less'
     }.get(ext, 'general programming')
-# add this near the top, alongside detect_language()
+
 FENCE_BY_LANG = {
-    'Dart/Flutter':     'dart',
-    'TypeScript/Angular':'ts',
-    'JavaScript/React': 'js',
-    'TypeScript/React': 'ts',
-    'Python':           'python',
-    'Java':             'java',
-    '.NET C#':          'csharp',
-    'Go':               'go',
-    'HTML':             'html',
-    'CSS':              'css',
-    'SCSS/Sass':        'scss',
-    'Less':             'less',
-    'general programming': ''
+    'Dart/Flutter':'dart', 'TypeScript/Angular':'ts', 'JavaScript/React':'js',
+    'TypeScript/React':'ts', 'Python':'python', 'Java':'java', '.NET C#':'csharp',
+    'Go':'go', 'HTML':'html', 'CSS':'css', 'SCSS/Sass':'scss', 'Less':'less',
+    'general programming':''
 }
 
-# ── 7) COLLECT ISSUES ──────────────────────────────────────────────────
+# ── 6) COLLECT ISSUES FROM LINTERS ─────────────────────────────────────
+
 issues = []
+
 # ESLint
 if isinstance(eslint_report, list):
     for rep in eslint_report:
@@ -149,9 +133,8 @@ if isinstance(eslint_report, list):
         if path in changed_files:
             for msg in rep.get('messages', []):
                 ln = msg.get('line')
-                if ln: issues.append({'file':path,'line':ln,
-                                      'code':msg.get('ruleId','ESLint'),
-                                      'message':msg.get('message','')})
+                if ln: issues.append({'file':path,'line':ln,'code':msg.get('ruleId','ESLint'),'message':msg.get('message','')})
+
 # Flake8
 if isinstance(flake8_report, dict):
     for ap, errs in flake8_report.items():
@@ -159,26 +142,23 @@ if isinstance(flake8_report, dict):
         if path in changed_files:
             for e in errs:
                 ln = e.get('line_number') or e.get('line')
-                if ln: issues.append({'file':path,'line':ln,
-                                      'code':e.get('code','Flake8'),
-                                      'message':e.get('text','')})
+                if ln: issues.append({'file':path,'line':ln,'code':e.get('code','Flake8'),'message':e.get('text','')})
+
 # ShellCheck
 if isinstance(shellcheck_report, list):
     for ent in shellcheck_report:
         path = os.path.relpath(ent.get('file',''))
         ln = ent.get('line')
-        if path in changed_files and ln: issues.append({'file':path,'line':ln,
-                                                         'code':ent.get('code','ShellCheck'),
-                                                         'message':ent.get('message','')})
+        if path in changed_files and ln: issues.append({'file':path,'line':ln,'code':ent.get('code','ShellCheck'),'message':ent.get('message','')})
+
 # Dart Analyzer
 if isinstance(dartanalyzer_report, dict):
     for diag in dartanalyzer_report.get('diagnostics', []):
         loc = diag.get('location', {})
         path = os.path.relpath(loc.get('file',''))
         ln = loc.get('range',{}).get('start',{}).get('line')
-        if path in changed_files and ln: issues.append({'file':path,'line':ln,
-                                                        'code':diag.get('code','DartAnalyzer'),
-                                                        'message':diag.get('problemMessage') or diag.get('message','')})
+        if path in changed_files and ln: issues.append({'file':path,'line':ln,'code':diag.get('code','DartAnalyzer'),'message':diag.get('problemMessage') or diag.get('message','')})
+
 # .NET Format
 if isinstance(dotnet_report, dict):
     diags = dotnet_report.get('Diagnostics') or dotnet_report.get('diagnostics')
@@ -186,198 +166,95 @@ if isinstance(dotnet_report, dict):
         for d in diags:
             path = os.path.relpath(d.get('Path') or d.get('path',''))
             ln = d.get('Region',{}).get('StartLine')
-            if path in changed_files and ln: issues.append({'file':path,'line':ln,
-                                                           'code':'DotNetFormat',
-                                                           'message':d.get('Message','')})
+            if path in changed_files and ln: issues.append({'file':path,'line':ln,'code':'DotNetFormat','message':d.get('Message','')})
 
-# ── 7b) COLLECT HTMLHint ISSUES ────────────────────────────────────────
+# HTMLHint
 if isinstance(htmlhint_report, list):
     for ent in htmlhint_report:
-        path = os.path.relpath(ent.get('file', ''))
-        ln   = ent.get('line', None)
-        msg  = ent.get('message', '')
-        rule = ent.get('rule', 'HTMLHint')
-        if path in changed_files and ln:
-            issues.append({
-                'file':    path,
-                'line':    ln,
-                'code':    rule,
-                'message': msg
-            })
+        path = os.path.relpath(ent.get('file',''))
+        ln   = ent.get('line')
+        msg  = ent.get('message','')
+        rule = ent.get('rule','HTMLHint')
+        if path in changed_files and ln: issues.append({'file':path,'line':ln,'code':rule,'message':msg})
 
-# ── 7c) COLLECT Stylelint ISSUES ──────────────────────────────────────
+# Stylelint
 if isinstance(stylelint_report, list):
     for rep in stylelint_report:
-        path = os.path.relpath(rep.get('source', ''))
-        ln   = rep.get('line', None)
-        msg  = rep.get('text', '')
-        rule = rep.get('rule', 'Stylelint')
-        if path in changed_files and ln:
-            issues.append({
-                'file':    path,
-                'line':    ln,
-                'code':    rule,
-                'message': msg
-            })
-# ── 8) GROUP AND FORMAT OUTPUT ─────────────────────────────────────────
+        path = os.path.relpath(rep.get('source',''))
+        ln   = rep.get('line')
+        msg  = rep.get('text','')
+        rule = rep.get('rule','Stylelint')
+        if path in changed_files and ln: issues.append({'file':path,'line':ln,'code':rule,'message':msg})
+
+# Group by file
 file_groups = {}
-for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
+for issue in issues:
+    file_groups.setdefault(issue['file'], []).append(issue)
 
-# Header with summary
-# at the top of your comment body…
+# ── 7) AI SUGGESTION FUNCTION ─────────────────────────────────────────
 
-
-
-
-# ── 6) AI SUGGESTION ───────────────────────────────────────────────────
 def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> str:
     lang = detect_language(file_path)
     prompt = dedent(f"""
 You are a highly experienced {lang} code reviewer and software architect.
 
-You will carefully analyze the provided code diff to identify any and all issues — not just the reported error. 
-You must review for:
-
-- Syntax errors
-- Logic issues
-- Naming conventions
-- Code style and formatting
-- Readability and maintainability
-- Code structure and clarity
-- Performance optimizations
-- Security considerations
-- {lang} best practices
-- Modern {lang} idioms
-- API misuse or potential bugs
-- Unnecessary redundancy or inefficiency
-
-You are analyzing a code diff that occurred in a Pull Request. Your task is to act as a **critical human reviewer** who must analyze both correctness and code quality.
-
-Below is the diff around line {line_no} in `{file_path}` (reported error: {code}):
+Analyze the diff around line {line_no} in `{file_path}` (reported: {code}):
 
 ```diff
 {patch_ctx}
-Output Format:
+```
+
+Output:
+
 Fix:
-	•	Provide both Original and Suggested blocks. Use proper code fences (depending on {lang} if multi-line) 
-	•	If no fix is needed, still include both. 
-	•	If the code is already correct, repeat the original code as suggested. 
+- Original block and Suggested block (proper code fences).
+- If no fix needed, repeat original code.
 
 Refactor:
-	•	Suggest any higher-level improvements that could improve code clarity, maintainability, or performance, even if not strictly necessary.
-	•	You may recommend minor cleanups, better patterns, or modern language idioms.
+- Any improvements on structure, clarity or performance.
 
 Why:
-	•	Briefly explain the reasoning behind your fix and/or refactor suggestions.
-	•	If no issue exists, explain why the code is acceptable.
-""")
-    system_prompt = (
-    f"You are a senior {lang} software architect and code reviewer. "
-    "You provide in-depth, actionable feedback, "
-    "catching syntax, style, performance, security, naming, and {lang} best practices."
+- Explain reasoning.
+"""
 )
+    system_prompt = f"You are a senior {lang} reviewer. Provide actionable feedback."
     resp = openai.chat.completions.create(
         model='gpt-4o-mini',
-        messages=[{'role':'system','content':system_prompt},
-                  {'role':'user','content':prompt}],
+        messages=[{'role':'system','content':system_prompt},{'role':'user','content':prompt}],
         temperature=0.0,
         max_tokens=400
     )
     return resp.choices[0].message.content.strip()
+
+# ── 8) DEVELOPER RATING & TROLL PROMPTS ────────────────────────────────
 
 rating_prompt = dedent(f"""
 You are a senior software reviewer.
 
 Evaluate the pull request submitted by @{dev_name} using the following data:
 
-- PR Title: "{title}"
-- Total Issues Detected: {len(issues)}
-- Files Affected: {len(file_groups)}
-- Total Commits: {commits}
-- Lines Added: {additions}
+- PR Title: "{title}"  
+- Total Issues Detected: {len(issues)}  
+- Files Affected: {len(file_groups)}  
+- Total Commits: {commits}  
+- Lines Added: {additions}  
 - Lines Deleted: {deletions}
 
-Base your evaluation on code cleanliness, lint adherence, readability, and developer discipline. Consider if the code followed best practices, had minimal issues, and was neatly structured.
-
 Respond with:
-- A creative title (e.g., "Code Ninja", "Syntax Sorcerer", etc.)
-- A rating out of 5 stars (⭐️) — use only full stars
-- A one-liner review summary using light-hearted emojis
-
-Be motivational but fair. If there are many issues, reduce the score accordingly. If it's a clean PR, reward it well.
-""")
+- A creative title (e.g., "Code Ninja", "Syntax Sorcerer").
+- A rating out of 5 stars (⭐️) — use only full stars.
+- A one-liner review summary using light-hearted emojis.
+"""
+)
 rating_resp = openai.chat.completions.create(
     model="gpt-4o-mini",
-    messages=[
-        {"role": "system", "content": "You are a playful yet insightful code reviewer."},
-        {"role": "user",   "content": rating_prompt}
-    ],
+    messages=[{"role":"system","content":"You are a playful yet insightful code reviewer."},{"role":"user","content":rating_prompt}],
     temperature=0.8,
     max_tokens=120
 )
 rating = rating_resp.choices[0].message.content.strip()
 
-
-
-
-md = []
-
-# Prepend your logo
-md.append(f'<img src="{img_url}" width="100" height="100" />')
-md.append('')
-# Title on its own line
-md.append('# brandOptics AI Neural Nexus')
-md.append('')
- 
-# Blank line between title and summary
-md.append("## 📌 Recommendations & Review Summary")
-md.append("")
-md.append(f"**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s) in this PR.")
-md.append("")
-
- 
-md.append(f"> 🧑‍💻 **Developer Rating for @{dev_name}**")
-for line in rating.splitlines():
-    md.append(f"> {line}")
- 
-md.append("---")
-# PR Details
-md.append("### Pull Request Metadata")
-md.append("")
-md.append(f"- **Title:** {title}")
-md.append(f"- **PR Link:** [#{pr_number}]({url})")
-md.append(f"- **Author:** @{dev_name}")
-md.append(f"- **Branch:** `{source_branch}` → `{target_branch}`")
-md.append(f"- **Opened On:** {created_at}")
-md.append("")
-
-# Change Statistics
-md.append("### Change Statistics")
-md.append(f"- **Commits:** {commits}")
-md.append(f"- **Lines Added:** {additions}")
-md.append(f"- **Lines Removed:** {deletions}")
-md.append(f"- **Files Changed:** {changed_files}")
-md.append("---")
-md.append("""
-Thanks for your contribution! A few tweaks are needed before we can merge.
-
-🔍 **Key Findings**  
-1. **Errors & Warnings:** Address any compilation errors or lint violations.  
-2. **Consistency:** Update naming and formatting to match project conventions.  
-3. **Clarity:** Simplify complex blocks, remove unused code, and add concise comments.  
-4. **Performance & Security:** Optimize frequently executed code blocks and ensure all inputs are validated.  
-5. **Tests & Docs:** Add or update tests for new logic and refresh any related documentation.
-
-💡 **Pro Tip**  
-Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
-
-Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
-""")
-md.append('')
-# Blank line to separate from the rest of the content
-# 2) Early-exit if there are no files to report on
-
-# Troll Section
+# Troll Prompt
 troll_prompt = dedent("""
 Invent a completely new, funny, over-the-top **office prank or office troll** that could happen at a software company.
 Requirements:
@@ -385,208 +262,138 @@ Requirements:
 - It can involve Developers, QA, Management, or any other team
 - Keep it SHORT (max 5 lines)
 - Use plenty of fun emojis
-- Do NOT always repeat the same joke style — be creative!
+
 Generate ONE such funny prank now:
-""")
+"""
+)
 troll_resp = openai.chat.completions.create(
     model="gpt-4o-mini",
-    messages=[
-        {"role": "system", "content": "You are a playful office troll."},
-        {"role": "user",   "content": troll_prompt}
-    ],
+    messages=[{"role":"system","content":"You are a playful office troll."},{"role":"user","content":troll_prompt}],
     temperature=0.7,
     max_tokens=200
 )
 troll = troll_resp.choices[0].message.content.strip()
 
- 
-md.append("> 🎭 _Prank War Dispatch:_")    # ← use '>' for blockquotes
+# ── 9) BUILD FINAL MARKDOWN ────────────────────────────────────────────
+
+md = []
+md.append(f'<img src="{img_url}" width="100" height="100" />\n')
+md.append('# brandOptics AI Neural Nexus\n')
+md.append('## 📌 Recommendations & Review Summary\n')
+md.append(f"**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).\n")
+md.append(f"> 🧑‍💻 **Developer Rating for @{dev_name}**\n")
+for line in rating.splitlines():
+    md.append(f"> {line}\n")
+md.append("---\n")
+md.append("### Pull Request Metadata\n")
+md.append(f"- **Title:** {title}\n")
+md.append(f"- **PR Link:** [#{pr_number}]({url})\n")
+md.append(f"- **Author:** @{dev_name}\n")
+md.append(f"- **Branch:** `{source_branch}` → `{target_branch}`\n")
+md.append(f"- **Opened On:** {created_at}\n\n")
+md.append("### Change Statistics\n")
+md.append(f"- **Commits:** {commits}\n")
+md.append(f"- **Lines Added:** {additions}\n")
+md.append(f"- **Lines Removed:** {deletions}\n")
+md.append(f"- **Files Changed:** {changed_files}\n")
+md.append("---\n")
+md.append(dedent(f"""
+Thanks for your contribution! A few tweaks are needed before we can merge.
+
+🔍 **Key Findings**
+1. **Errors & Warnings:** Address any compilation errors or lint violations.
+2. **Consistency:** Update naming and formatting to match project conventions.
+3. **Clarity:** Simplify complex blocks, remove unused code, and add concise comments.
+4. **Performance & Security:** Optimize frequently executed code blocks and ensure all inputs are validated.
+5. **Tests & Docs:** Add or update tests for new logic and refresh any related documentation.
+
+💡 **Pro Tip**  
+Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
+
+Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
+"""))
+md.append('\n> 🎭 _Prank War Dispatch:_\n')
 for line in troll.splitlines():
-    md.append(f"> {line}")                # each line must also start with '>'
- 
-md.append('## 📂 File-wise Issue Breakdown & AI Suggestions')
- 
-details = []  
+    md.append(f"> {line}\n")
+md.append('\n## 📂 File-wise Issue Breakdown & AI Suggestions\n')
+
 for file_path, file_issues in sorted(file_groups.items()):
-    md.append(f"**File =>** `{file_path}`")
-    md.append('')
-    md.append('| Line No. | Lint Rule / Error Message      | Suggested Fix (Summary)          |')
-    md.append('|:--------:|:-------------------------------|:---------------------------------|')
-    
+    md.append(f"**File:** `{file_path}`\n")
+    md.append('| Line No. | Lint Rule / Error Message | Suggested Fix (Summary) |\n')
+    md.append('|:--------:|:--------------------------|:------------------------|\n')
+
     gh_file = next(f for f in pr.get_files() if f.filename == file_path)
     patch = gh_file.patch or ''
     details = []
 
-    if file_issues:
-        for it in sorted(file_issues, key=lambda x: x['line']):
-            ln = it['line']
-            issue_md = f"`{it['code']}` {it['message']}"
-            ctx = get_patch_context(patch, ln)
-            ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
+    for it in sorted(file_issues, key=lambda x: x['line']):
+        ln = it['line']
+        issue_md = f"`{it['code']}` {it['message']}"
+        ctx = get_patch_context(patch, ln)
+        ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
 
-            # determine fence based on file_path
-            lang = detect_language(file_path)
-            fence = FENCE_BY_LANG.get(lang, '')
+        lang = detect_language(file_path)
+        fence = FENCE_BY_LANG.get(lang, '')
+        m = re.search(rf'Fix:\s*```{fence}\n([\s\S]*?)```', ai_out)
+        full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
+        summary = ' '.join(full_fix.splitlines()[:3]).replace('|','\\|')
+        md.append(f"| {ln} | {issue_md} | `{summary}` |\n")
+        details.append((ln, full_fix, ai_out, fence))
 
-            # extract the Fix section
-            fence_re = fence or r'\w*'
-            m = re.search(rf'Fix:\s*```{fence_re}\n([\s\S]*?)```', ai_out)
-            full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
-
-            lines = full_fix.splitlines()
-            summary = ' '.join(lines[:3]).replace('|','\\|')
-            md.append(f"| {ln} | {issue_md} | `{summary}` |")
-            details.append((ln, full_fix, ai_out, fence))
-
-    md.append('')
-    
-    # Now properly loop through details inside correct scope
     for ln, full_fix, ai_out, fence in details:
-        md.append('<details>')
-        md.append(f'<summary><strong>📎 Line {ln} – AI Suggestions & Code Insights</strong> (click to expand)</summary>')
-
-        if fence:
-            md.append(f'\n```{fence}')
-        else:
-            md.append('\n```')
-
-        md.append(full_fix)
-        md.append('```')
-
-        # Refactor
+        md.append(f"<details>\n<summary><strong>📎 Line {ln} – AI Suggestions & Code Insights</strong></summary>\n\n")
+        md.append("**Fix:**\n\n")
+        md.append(f"```{fence}\n{full_fix}\n```\n")
         ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
         if ref:
-            md.append('\n**Refactor:**')
-            md.append(ref.group(1).strip())
-
-        # Why
+            md.append("**Refactor:**\n")
+            md.append(f"{ref.group(1).strip()}\n")
         why = re.search(r'Why:\s*([\s\S]*?)(?=$)', ai_out)
         if why:
-            md.append('\n**Why:**')
-            md.append(why.group(1).strip())
+            md.append("**Why:**\n")
+            md.append(f"{why.group(1).strip()}\n")
+        md.append("</details>\n")
 
-        md.append('</details>')
-        md.append('')
 if not issues:
     md.clear()
-    # 1) image on its own line
-    md.append(f'<img src="{img_url}" width="100" height="100" />')
-    md.append('')
-    md.append('# brandOptics Neural AI Review:')
-    md.append('')
-    md.append('**No issues found—your code** passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
-    md.append('')
-    # PR Details
-    md.append("### Pull Request Metadata")
-    md.append("")
-    md.append(f"- **Title:** {title}")
-    md.append(f"- **PR Link:** [#{pr_number}]({url})")
-    md.append(f"- **Author:** @{dev_name}")
-    md.append(f"- **Branch:** `{source_branch}` → `{target_branch}`")
-    md.append(f"- **Opened On:** {created_at}")
-    md.append("")
-
-    # Change Statistics
-    md.append("### Change Statistics")
-    md.append(f"- **Commits:** {commits}")
-    md.append(f"- **Lines Added:** {additions}")
-    md.append(f"- **Lines Removed:** {deletions}")
-    md.append(f"- **Files Changed:** {changed_files}")
-    md.append('---')
-    md.append('**🏅 Developer Performance Rating**')
-    md.append('')
-    md.append(f'- 👤 **Developer:** @{dev_name}')
-    md.append('- 🏷️ **Title:** Code Maestro')
-    md.append('- ⭐⭐⭐⭐⭐')
-    md.append('- ✨ **Summary:** Clean, efficient, and merge-ready! Keep up the solid work! 💪🔥')
-    
-    # 5) another blank line before whatever comes next
-    md.append('')
-    # Generate a quick AI‐driven developer joke
+    md.append(f'<img src="{img_url}" width="100" height="100" />\n')
+    md.append('# brandOptics Neural AI Review:\n')
+    md.append('**No issues found—your code passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!**\n')
+    md.append("### Pull Request Metadata\n")
+    md.append(f"- **Title:** {title}\n")
+    md.append(f"- **PR Link:** [#{pr_number}]({url})\n")
+    md.append(f"- **Author:** @{dev_name}\n")
+    md.append(f"- **Branch:** `{source_branch}` → `{target_branch}`\n")
+    md.append(f"- **Opened On:** {created_at}\n\n")
+    md.append("### Change Statistics\n")
+    md.append(f"- **Commits:** {commits}\n")
+    md.append(f"- **Lines Added:** {additions}\n")
+    md.append(f"- **Lines Removed:** {deletions}\n")
+    md.append(f"- **Files Changed:** {changed_files}\n")
+    md.append('---\n')
+    md.append('**🏅 Developer Performance Rating**\n')
+    md.append(f'- 👤 **Developer:** @{dev_name}\n')
+    md.append('- 🏷️ **Title:** Code Maestro\n')
+    md.append('- ⭐⭐⭐⭐⭐\n')
+    md.append('- ✨ **Summary:** Clean, efficient, and merge-ready! Keep up the solid work! 💪🔥\n')
     joke_resp = openai.chat.completions.create(
         model='gpt-4o-mini',
-        messages=[
-            { "role": "system", "content": "You are a witty developer assistant." },
-            { "role": "user",   "content": "Tell me a short, fun programming joke about clean code reviews." }
-        ],
+        messages=[{"role":"system","content":"You are a witty developer assistant."},{"role":"user","content":"Tell me a short, fun programming joke about clean code reviews."}],
         temperature=0.8,
         max_tokens=40
     )
     joke = joke_resp.choices[0].message.content.strip()
-    md.append  ('---')
-    # Append the joke under the success message
+    md.append('---\n')
     md.append(f'💬 Joke for you: {joke}')
 
-# ── 9) POST COMMENT & STATUS ───────────────────────────────────────────
+# ── 10) POST COMMENT & STATUS ───────────────────────────────────────────
+
 body = '\n'.join(md)
 pr.create_issue_comment(body)
-total_issues = len(issues)
-files_affected = len(file_groups)
-
-if issues:
-
-
-    # pr.create_review(
-    #     body=dedent(f"""
-    # <img src="{img_url}" width="100" height="100" /> 
-
-    # # brandOptics AI Neural Nexus   
-    
-    # ## Review: 🚧 Action Required
-
-    # Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
-    # Thanks for your contribution! A few tweaks are needed before we can merge.
-
-    # 🔍 **Key Findings**  
-    # 1. **Errors & Warnings:** Address any compilation errors or lint violations.  
-    # 2. **Consistency:** Update naming and formatting to match project conventions.  
-    # 3. **Clarity:** Simplify complex blocks, remove unused code, and add concise comments.  
-    # 4. **Performance & Security:** Optimize hotspots and ensure all inputs are validated.  
-    # 5. **Tests & Docs:** Add or update tests for new logic and refresh any related documentation.
-
-    # 💡 **Pro Tip**  
-    # Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
-
-    # Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
-    # """),
-    #     event="REQUEST_CHANGES"
-    # )
-
-    repo.get_commit(full_sha).create_status(
-        context="brandOptics AI Neural Nexus Code Review",
-        state="failure",
-        description="Issues detected—please refine your code and push updates."
-    )
-else:
-     # Approve the PR to remove block
-#     pr.create_review(
-#          body=dedent(f"""
-#             <img src="{img_url}" width="100" height="100" /> 
-
-#             # brandOptics AI Neural Nexus  
-
-#             ## ✅ Review: All Clear!
-
-#             No issues detected — your code passed all checks, lint validations, and best practice scans. 🧠✨  
-#             Everything looks clean, performant, and production-ready.
-
-#             🔍 **What Was Checked**  
-#             - ✅ Compilation & Linting  
-#             - ✅ Naming, Style & Formatting  
-#             - ✅ Readability & Code Clarity  
-#             - ✅ Performance & Security Considerations  
-#             - ✅ Documentation & Test Coverage  
-
-#             💡 **Nice Work**  
-#             This is a solid PR — clean, structured, and merge-ready. 🚀
-
-#             _Approved automatically by brandOptics AI Neural Nexus._
-# """),
-#         event="APPROVE"
-#     )
-    repo.get_commit(full_sha).create_status(
-    context='brandOptics AI Neural Nexus Code Review',
-    state='failure' if issues else 'success',
-    description=('Issues detected — please refine your code.' if issues else 'No code issues detected.')
+repo.get_commit(pr.head.sha).create_status(
+    context="brandOptics AI Neural Nexus Code Review",
+    state="failure" if issues else "success",
+    description=("Issues detected — please refine your code." if issues else "No code issues detected.")
 )
+
 print(f"Posted AI review for PR #{pr_number}")
