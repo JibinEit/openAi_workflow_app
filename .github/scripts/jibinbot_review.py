@@ -45,7 +45,7 @@ default_branch = repo.default_branch
 # Make sure the file exists at .github/assets/bailogo.png in your repo's default branch
 # And that your repository is public or the image is accessible.
 img_url = (
-    f"[https://raw.githubusercontent.com/](https://raw.githubusercontent.com/)"
+    f"https://raw.githubusercontent.com/"
     f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
 )
 
@@ -271,7 +271,7 @@ def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int, issu
     ```
 
     Please provide your analysis and suggestions in exactly three labeled sections.
-    **Crucially, ensure the 'Suggested Fix' section includes a code block formatted with triple backticks and the correct language identifier immediately after the opening backticks (e.g., ```{fence}\n...code...\n```).**
+    **Crucially, ensure the 'Suggested Fix' section includes a code block formatted with triple backticks and the correct language identifier immediately after the opening backticks (e.g., ```{fence}\\n...code...\\n```).**
     If showing original and corrected code, keep it within a single code block.
 
     **Analysis:**
@@ -449,50 +449,50 @@ for file_path, file_issues in sorted(file_groups.items()):
             lang = detect_language(file_path)
             fence = FENCE_BY_LANG.get(lang, '')
 
-            # --- TWO-STAGE EXTRACTION FOR SUGGESTED FIX ---
+            # --- [START] CORRECTED EXTRACTION LOGIC ---
             analysis_content = "No specific analysis provided."
             full_fix_content = "No suggested fix snippet provided."
             rationale_content = "No rationale provided."
 
-            # Stage 1: Extract sections based on headers
             analysis_match = re.search(r'^\*\*Analysis:\*\*\s*\n([\s\S]*?)(?=\n\*\*Suggested Fix:\*\*|$)', ai_out, re.MULTILINE)
             if analysis_match:
                 analysis_content = analysis_match.group(1).strip()
 
-            suggested_fix_section_match = re.search(r'^\*\*Suggested Fix:\*\*\s*\n([\s\S]*?)(?=\n\*\*Rationale:\*\*|$)', ai_out, re.MULTILINE)
-            
-            if suggested_fix_section_match:
-                # Stage 2: Within the "Suggested Fix" section, find the code block
-                suggested_fix_section_text = suggested_fix_section_match.group(1).strip()
-                code_block_match = re.search(r'```(?:\w*\n)?([\s\S]*?)```', suggested_fix_section_text)
-                if code_block_match:
-                    full_fix_content = code_block_match.group(1).strip()
-                else:
-                    # Fallback: if no code block found, use the raw text content as the fix
-                    full_fix_content = suggested_fix_section_text # Use the entire section text
-                    # Limit to first few lines if it's too long
-                    if len(full_fix_content.splitlines()) > 10:
-                        full_fix_content = '\n'.join(full_fix_content.splitlines()[:10]) + '\n...'
+            suggested_fix_match = re.search(r'^\*\*Suggested Fix:\*\*\s*\n([\s\S]*?)(?=\n\*\*Rationale:\*\*|$)', ai_out, re.MULTILINE)
+            if suggested_fix_match:
+                # Directly use the entire content of the "Suggested Fix" section.
+                # The AI is prompted to include the code block here, so this will capture it.
+                full_fix_content = suggested_fix_match.group(1).strip()
             
             rationale_match = re.search(r'^\*\*Rationale:\*\*\s*\n([\s\S]*?)(?=$)', ai_out, re.MULTILINE)
             if rationale_match:
                 rationale_content = rationale_match.group(1).strip()
-            # --- END TWO-STAGE EXTRACTION ---
+            # --- [END] CORRECTED EXTRACTION LOGIC ---
 
 
             # Use the first few lines of the fix as a summary for the table
-            summary_lines = full_fix_content.splitlines()[:3]
-            summary = ' '.join(summary_lines).replace('|','\\|') # Escape pipes for markdown table
-            if len(full_fix_content.splitlines()) > 3 or (len(summary_lines) == 1 and len(summary) > 50): # Add "..." if summary is too long
+            # We need to extract the code from the fix content for a clean summary
+            summary_code_match = re.search(r'```(?:\w*\n)?([\s\S]*?)```', full_fix_content)
+            summary_text_for_table = full_fix_content
+            if summary_code_match:
+                summary_text_for_table = summary_code_match.group(1).strip()
+
+            summary_lines = summary_text_for_table.splitlines()[:3]
+            summary = ' '.join(summary_lines).replace('|','\\|')
+            if len(summary_text_for_table.splitlines()) > 3 or (len(summary_lines) == 1 and len(summary) > 50):
                 summary += '...'
+            
+            # If the summary is empty after extraction, fall back to the raw content
+            if not summary.strip():
+                summary = "See details for suggested fix."
 
             md.append(f"| {ln} | {issue_md} | `{summary}` |")
             details_for_file.append({
                 'line': ln,
                 'analysis': analysis_content,
-                'full_fix': full_fix_content,
+                'full_fix': full_fix_content, # This now contains intro text + code block
                 'rationale': rationale_content,
-                'fence': fence
+                'fence': fence # 'fence' is not strictly needed here but kept for context
             })
     md.append('') # Blank line after the table for this file
 
@@ -504,11 +504,8 @@ for file_path, file_issues in sorted(file_groups.items()):
             md.append('')
             md.append(f'**Analysis:**\n{detail["analysis"]}')
             md.append('')
-            md.append(f'**Suggested Fix:**')
-            # Always wrap in code blocks for consistency, even if AI provided them
-            md.append(f'```{detail["fence"]}')
-            md.append(detail["full_fix"])
-            md.append('```')
+            # The full_fix content already has the code block, so just print it.
+            md.append(f'**Suggested Fix:**\n{detail["full_fix"]}')
             md.append('')
             md.append(f'**Rationale:**\n{detail["rationale"]}')
             md.append('')
