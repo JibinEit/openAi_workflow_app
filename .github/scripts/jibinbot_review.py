@@ -412,62 +412,61 @@ for file_path, file_issues in sorted(file_groups.items()):
     md.append('')
     md.append('| Line No. | Lint Rule / Error Message      | Suggested Fix (Summary)          |')
     md.append('|:--------:|:-------------------------------|:---------------------------------|')
+    
     gh_file = next(f for f in pr.get_files() if f.filename == file_path)
     patch = gh_file.patch or ''
     details = []
-    if 'file_issues' in locals() and file_issues:
+
+    if file_issues:
         for it in sorted(file_issues, key=lambda x: x['line']):
             ln = it['line']
-    issue_md = f"`{it['code']}` {it['message']}"
-    ctx = get_patch_context(patch, ln)
-    ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
+            issue_md = f"`{it['code']}` {it['message']}"
+            ctx = get_patch_context(patch, ln)
+            ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
 
-    # 1) determine fence based on file_path
-    lang = detect_language(file_path)
-    fence = FENCE_BY_LANG.get(lang, '')
+            # determine fence based on file_path
+            lang = detect_language(file_path)
+            fence = FENCE_BY_LANG.get(lang, '')
 
-    # 2) extract the “Fix:” section regardless of fence label
-    fence_re = fence or r'\w*'
-    m = re.search(rf'Fix:\s*```{fence_re}\n([\s\S]*?)```', ai_out)
-    full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
+            # extract the Fix section
+            fence_re = fence or r'\w*'
+            m = re.search(rf'Fix:\s*```{fence_re}\n([\s\S]*?)```', ai_out)
+            full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
 
-    lines = full_fix.splitlines()
-    summary = ' '.join(lines[:3]).replace('|','\\|')
-    md.append(f"| {ln} | {issue_md} | `{summary}` |")
-    details.append((ln, full_fix, ai_out))
+            lines = full_fix.splitlines()
+            summary = ' '.join(lines[:3]).replace('|','\\|')
+            md.append(f"| {ln} | {issue_md} | `{summary}` |")
+            details.append((ln, full_fix, ai_out, fence))
 
-md.append('')
-if details:
-    for ln, full_fix, ai_out in details:
+    md.append('')
+    
+    # Now properly loop through details inside correct scope
+    for ln, full_fix, ai_out, fence in details:
         md.append('<details>')
-    md.append(f'<summary><strong>📎 Line {ln} – AI Suggestions & Code Insights</strong> (click to expand)</summary>')
-    md.append('')
+        md.append(f'<summary><strong>📎 Line {ln} – AI Suggestions & Code Insights</strong> (click to expand)</summary>')
 
-    # Display full fix inside code fence
-    if fence:
-        md.append(f'```{fence}')
-    else:
+        if fence:
+            md.append(f'\n```{fence}')
+        else:
+            md.append('\n```')
+
+        md.append(full_fix)
         md.append('```')
-    md.append(full_fix)
-    md.append('```')
-    md.append('')
 
-    # Extract Refactor section using regex
-    ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
-    if ref:
-        md.append('**Refactor:**')
-        md.append(ref.group(1).strip())
+        # Refactor
+        ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
+        if ref:
+            md.append('\n**Refactor:**')
+            md.append(ref.group(1).strip())
+
+        # Why
+        why = re.search(r'Why:\s*([\s\S]*?)(?=$)', ai_out)
+        if why:
+            md.append('\n**Why:**')
+            md.append(why.group(1).strip())
+
+        md.append('</details>')
         md.append('')
-
-    # Extract Why section using regex
-    why = re.search(r'Why:\s*([\s\S]*?)(?=$)', ai_out)
-    if why:
-        md.append('**Why:**')
-        md.append(why.group(1).strip())
-        md.append('')
-
-    md.append('</details>')
-    md.append('')
 if not issues:
     md.clear()
     # 1) image on its own line
