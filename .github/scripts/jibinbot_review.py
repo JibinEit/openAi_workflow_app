@@ -565,10 +565,10 @@ if not issues:
     md.append(f"| **Lines Added** | <span style='color:green;'>+{additions}</span>         |") # Added inline styling
     md.append(f"| **Lines Removed** | <span style='color:red;'>-{deletions}</span>           |") # Added inline styling
     md.append(f"| **Files Changed** | {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`) |")
-md.append("---")
-md.append("### 🏅 Developer Performance Rating")
-md.append("")
-md.append(">") # Start the blockquote
+    md.append("---")
+    md.append("### 🏅 Developer Performance Rating")
+    md.append("")
+    md.append(">") # Start the blockquote
 # Split the rating into its components if possible, or just iterate lines
 rating_lines = rating.splitlines()
 
