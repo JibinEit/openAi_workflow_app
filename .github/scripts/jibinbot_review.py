@@ -522,28 +522,26 @@ if not issues:
     md.append('')
     md.append(f'Congratulations, @{dev_name}! Your Pull Request has successfully passed all automated code quality checks. Your code is clean, adheres to best practices, and is optimized for performance. 🚀')
     md.append('')
-    md.append('---')
-    md.append("### Pull Request Metadata")
+    md.append("---")
+    md.append("### 📝 Pull Request Overview")
     md.append("")
-    md.append(f"- **Title:** {title}")
-    md.append(f"- **PR Link:** [#{pr_number}]({url})")
-    md.append(f"- **Author:** @{dev_name}")
-    md.append(f"- **Branch:** `{source_branch}` → `{target_branch}`")
-    md.append(f"- **Opened On:** {created_at}")
+    md.append("| Detail               | Value                                                 |")
+    md.append("|:---------------------|:------------------------------------------------------|")
+    md.append(f"| **Title** | {title}                                               |")
+    md.append(f"| **PR Link** | [#{pr_number}]({url})                                  |")
+    md.append(f"| **Author** | @{dev_name}                                           |")
+    md.append(f"| **Branches** | `{source_branch}` &#8594; `{target_branch}`             |") # Using Unicode arrow
+    md.append(f"| **Opened On** | {created_at}                                          |")
+    md.append(f"| **Commits** | {commits}                                             |")
+    md.append(f"| **Lines Added** | <span style='color:green;'>+{additions}</span>         |") # Added inline styling
+    md.append(f"| **Lines Removed** | <span style='color:red;'>-{deletions}</span>           |") # Added inline styling
+    md.append(f"| **Files Changed** | {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`) |")
+    md.append("---")
+    md.append("### 🏅 Developer Performance Rating")
     md.append("")
-
-    md.append("### Change Statistics")
-    md.append(f"- **Commits:** {commits}")
-    md.append(f"- **Lines Added:** {additions}")
-    md.append(f"- **Lines Removed:** {deletions}")
-    md.append(f"- **Files Changed:** {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`)")
-    md.append('---')
-    md.append('**🏅 Developer Performance Rating**')
-    md.append('')
     for line in rating.splitlines():
-        md.append(f'- {line}')
-    md.append('')
-
+        md.append(f"- {line}")
+    md.append("")
     # Generate a quick AI‐driven developer joke
     joke_resp = openai.chat.completions.create(
         model='gpt-4o-mini',
