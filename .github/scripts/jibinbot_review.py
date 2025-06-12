@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import json
 import re
@@ -47,7 +46,7 @@ default_branch = repo.default_branch
 
 # build the raw.githubusercontent URL to your asset
 img_url = (
-    f"https://raw.githubusercontent.com/"
+    f"[https://raw.githubusercontent.com/](https://raw.githubusercontent.com/)"
     f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
 )
 
@@ -248,7 +247,7 @@ file_groups = {}
 for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 
 # ── 6) AI SUGGESTION ───────────────────────────────────────────────────
-def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> str:
+def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int, issue_message: str) -> str:
     lang = detect_language(file_path)
     # Extract the relevant original code snippet from the patch context
     # This requires a bit of careful parsing of the patch to get lines without '+' or '-'
@@ -269,7 +268,7 @@ def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> s
     - **File:** `{file_path}`
     - **Line:** `{line_no}`
     - **Issue Code:** `{code}`
-    - **Message:** `{it['message']}`
+    - **Message:** `{issue_message}`
 
     Here's the relevant code context (a diff snippet around the reported line):
     ```diff
@@ -356,7 +355,7 @@ for line in rating.splitlines():
 
 md.append("---")
 # PR Details
-md.append("###  pull Request Metadata")
+md.append("###  Pull Request Metadata") # Corrected typo: "Pull"
 md.append("")
 md.append(f"- **Title:** {title}")
 md.append(f"- **PR Link:** [#{pr_number}]({url})")
@@ -438,19 +437,28 @@ for file_path, file_issues in sorted(file_groups.items()):
             ln = it['line']
             issue_md = f"`{it['code']}`: {it['message']}"
             ctx = get_patch_context(patch, ln)
-            ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
+            # Pass the issue message to the AI suggestion function
+            ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln, it['message'])
 
             # 1) determine fence based on file_path
             lang = detect_language(file_path)
             fence = FENCE_BY_LANG.get(lang, '')
 
-            # Extract sections from AI output
+            # Extract sections from AI output using more flexible regex
+            # This regex is more tolerant of newlines and optional language hints after ```
             analysis_match = re.search(r'^\*\*Analysis:\*\*\s*\n([\s\S]*?)(?=\n\*\*Suggested Fix:\*\*|$)', ai_out, re.MULTILINE)
-            suggested_fix_match = re.search(r'^\*\*Suggested Fix:\*\*\s*\n(.*?)```(?:' + re.escape(fence) + r')?\n([\s\S]*?)```(?=\n\*\*Rationale:\*\*|$)', ai_out, re.MULTILINE)
+            
+            # --- IMPROVED REGEX FOR SUGGESTED FIX ---
+            suggested_fix_match = re.search(
+                r'^\*\*Suggested Fix:\*\*\s*\n```(?:.*?)\n([\s\S]*?)```(?=\n\*\*Rationale:\*\*|$)',
+                ai_out, re.MULTILINE
+            )
+            # --- END IMPROVED REGEX ---
+
             rationale_match = re.search(r'^\*\*Rationale:\*\*\s*\n([\s\S]*?)(?=$)', ai_out, re.MULTILINE)
 
             analysis_content = analysis_match.group(1).strip() if analysis_match else "No specific analysis provided."
-            full_fix_content = suggested_fix_match.group(2).strip() if suggested_fix_match else "No suggested fix snippet provided."
+            full_fix_content = suggested_fix_match.group(1).strip() if suggested_fix_match else "No suggested fix snippet provided."
             rationale_content = rationale_match.group(1).strip() if rationale_match else "No rationale provided."
 
             # Use the first few lines of the fix as a summary for the table
