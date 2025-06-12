@@ -153,4 +153,4 @@ jobs:
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           TARGET_TIMEZONE: Asia/Kolkata
         run: |
-          python .github/scripts/jibinbot_review.py
+          python .github/scripts/main.py
