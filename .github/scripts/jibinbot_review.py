@@ -259,10 +259,9 @@ Below is the diff around line {line_no} in `{file_path}` (reported error: {code}
 {patch_ctx}
 Output Format:
 Fix:
-	•	Provide both Original and Suggested blocks. 
+	•	Provide both Original and Suggested blocks. Use proper code fences (depending on {lang} if multi-line) 
 	•	If no fix is needed, still include both. 
 	•	If the code is already correct, repeat the original code as suggested. 
-	•	Use proper code fences (depending on {lang} if multi-line) 
 
 Refactor:
 	•	Suggest any higher-level improvements that could improve code clarity, maintainability, or performance, even if not strictly necessary.
@@ -444,16 +443,27 @@ if details:
     md.append(f'<summary><strong>📎 Line {ln} – AI Suggestions & Code Insights</strong> (click to expand)</summary>')
     md.append('')
 
-    # Use f-string here so {fence} is replaced
-    md.append(f'```{fence}' if fence else '```')
+    # Display full fix inside code fence
+    if fence:
+        md.append(f'```{fence}')
+    else:
+        md.append('```')
     md.append(full_fix)
     md.append('```')
     md.append('')
 
+    # Extract Refactor section using regex
     ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
     if ref:
         md.append('**Refactor:**')
         md.append(ref.group(1).strip())
+        md.append('')
+
+    # Extract Why section using regex
+    why = re.search(r'Why:\s*([\s\S]*?)(?=$)', ai_out)
+    if why:
+        md.append('**Why:**')
+        md.append(why.group(1).strip())
         md.append('')
 
     md.append('</details>')
