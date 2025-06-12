@@ -6,7 +6,7 @@ from pathlib import Path
 from textwrap import dedent
 import openai
 from github import Github
-
+import re # Make sure 'import re' is at the top of your Python file
 # --- 1) SETUP ──────────────────────────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
@@ -536,25 +536,32 @@ if not issues:
     md.append(f"| **Lines Added** | <span style='color:green;'>+{additions}</span>         |") # Added inline styling
     md.append(f"| **Lines Removed** | <span style='color:red;'>-{deletions}</span>           |") # Added inline styling
     md.append(f"| **Files Changed** | {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`) |")
-    md.append("---")
-    md.append("### 🏅 Developer Performance Rating")
-    md.append("")
-    md.append(">") # Start the blockquote
-    # Split the rating into its components if possible, or just iterate lines
-    rating_lines = rating.splitlines()
+md.append("---")
+md.append("### 🏅 Developer Performance Rating")
+md.append("")
+md.append(">") # Start the blockquote
+# Split the rating into its components if possible, or just iterate lines
+rating_lines = rating.splitlines()
 
-    if rating_lines:
-        md.append(f"> **{rating_lines[0]}**") # Bold the title
-        if len(rating_lines) > 1:
-            md.append(f"> {rating_lines[1]}") # The stars line
-        if len(rating_lines) > 2:
-            # Join the rest of the lines with a space for the summary, or keep them separate
-            # For a more compact summary, you might join them.
-            md.append(f"> {rating_lines[2]}") # The summary message
-            for i in range(3, len(rating_lines)): # In case the AI generates more lines
-                md.append(f"> {rating_lines[i]}")
+if rating_lines:
+    # Get the original first line from the AI's rating output
+    original_title_line = rating_lines[0]
+ 
+    cleaned_title = re.sub(r'^\s*#+\s*Title:\s*', '', original_title_line, flags=re.IGNORECASE).strip()
 
-    md.append("") # End the blockquote
+    # Now append the cleaned and bolded title
+    md.append(f"> **{cleaned_title}**") # Bold the title
+
+    if len(rating_lines) > 1:
+        md.append(f"> {rating_lines[1]}") # The stars line
+    if len(rating_lines) > 2:
+        # The remaining lines are the summary message
+        # Iterate from index 2 for the message part
+        for i in range(2, len(rating_lines)):
+            md.append(f"> {rating_lines[i]}") # Append remaining lines as part of the blockquote
+
+    md.append("") # End the blockquote (by adding a blank line outside it)
+
     # Generate a quick AI‐driven developer joke
     joke_resp = openai.chat.completions.create(
         model='gpt-4o-mini',
