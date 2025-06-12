@@ -7,7 +7,7 @@ from textwrap import dedent
 import openai
 from github import Github
 
-# ── 1) SETUP ──────────────────────────────────────────────────────────
+# --- 1) SETUP ──────────────────────────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
 REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
@@ -19,7 +19,7 @@ if not OPENAI_API_KEY or not GITHUB_TOKEN:
 openai.api_key = OPENAI_API_KEY
 gh = Github(GITHUB_TOKEN)
 
-# ── 2) LOAD PR DATA ────────────────────────────────────────────────────
+# --- 2) LOAD PR DATA ────────────────────────────────────────────────────
 with open(EVENT_PATH) as f:
     event = json.load(f)
 pr_number = event["pull_request"]["number"]
@@ -38,7 +38,7 @@ commits      = event["pull_request"]["commits"]
 additions    = event["pull_request"]["additions"]
 deletions    = event["pull_request"]["deletions"]
 
-# ── Insert logo at top of comment ────────────────────────────────────
+# --- Insert logo at top of comment ────────────────────────────────────
 default_branch = repo.default_branch
 
 # Ensure the image URL is correct and points to the raw content of the default branch
@@ -49,7 +49,7 @@ img_url = (
     f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
 )
 
-# ── 3) DETECT CHANGED FILES (exclude .github/) ─────────────────────────
+# --- 3) DETECT CHANGED FILES (exclude .github/) ─────────────────────────
 changed_files_list = [f.filename for f in pr.get_files()
                       if f.patch and not f.filename.lower().startswith('.github/')]
 
@@ -74,7 +74,7 @@ Make sure your changes include source code updates (excluding config/docs only) 
     )
     exit(0)
 
-# ── 4) LOAD LINTER REPORTS ─────────────────────────────────────────────
+# --- 4) LOAD LINTER REPORTS ─────────────────────────────────────────────
 def load_json(path: Path):
     try:
         return json.loads(path.read_text())
@@ -90,7 +90,7 @@ dotnet_report        = load_json(reports_dir / 'dotnet-format.json')
 htmlhint_report      = load_json(reports_dir / 'htmlhint.json')
 stylelint_report     = load_json(reports_dir / 'stylelint.json')
 
-# ── 5) HELPERS ─────────────────────────────────────────────────────────
+# --- 5) HELPERS ─────────────────────────────────────────────────────────
 def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
     """Extracts a contextual snippet from a patch around a specific line number."""
     file_line = None
@@ -127,7 +127,7 @@ def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
     return '\n'.join(final_context_lines)
 
 
-# ── LANGUAGE DETECTION ───────────────────────────────────────────────────
+# --- LANGUAGE DETECTION ───────────────────────────────────────────────────
 def detect_language(file_path: str) -> str:
     ext = Path(file_path).suffix.lower()
     return {
@@ -166,7 +166,7 @@ FENCE_BY_LANG = {
     'general programming': '' # Default to no specific fence if unknown
 }
 
-# ── 7) COLLECT ISSUES ──────────────────────────────────────────────────
+# --- 7) COLLECT ISSUES ──────────────────────────────────────────────────
 issues = []
 # ESLint
 if isinstance(eslint_report, list):
@@ -216,7 +216,7 @@ if isinstance(dotnet_report, dict):
                                                            'code':'DotNetFormat',
                                                            'message':d.get('Message','')})
 
-# ── 7b) COLLECT HTMLHint ISSUES ────────────────────────────────────────
+# --- 7b) COLLECT HTMLHint ISSUES ────────────────────────────────────────
 if isinstance(htmlhint_report, list):
     for ent in htmlhint_report:
         path = os.path.relpath(ent.get('file', ''))
@@ -231,7 +231,7 @@ if isinstance(htmlhint_report, list):
                 'message': msg
             })
 
-# ── 7c) COLLECT Stylelint ISSUES ──────────────────────────────────────
+# --- 7c) COLLECT Stylelint ISSUES ──────────────────────────────────────
 if isinstance(stylelint_report, list):
     for rep in stylelint_report:
         path = os.path.relpath(rep.get('source', ''))
@@ -245,16 +245,17 @@ if isinstance(stylelint_report, list):
                 'code':    rule,
                 'message': msg
             })
-# ── 8) GROUP AND FORMAT OUTPUT ─────────────────────────────────────────
+# --- 8) GROUP AND FORMAT OUTPUT ─────────────────────────────────────────
 file_groups = {}
 for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 
-# ── 6) AI SUGGESTION ───────────────────────────────────────────────────
+# --- 6) AI SUGGESTION ───────────────────────────────────────────────────
 def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int, issue_message: str) -> str:
     lang = detect_language(file_path)
     fence = FENCE_BY_LANG.get(lang, '') # Get the appropriate fence
 
-    # Provide stronger instructions for AI to always include the language fence
+    # Provided stronger instructions for AI to always include the language fence
+    # and to ensure the "Suggested Fix" section contains the full code block.
     prompt = dedent(f"""
     You are a highly experienced {lang} code reviewer and software architect.
     Your task is to analyze the provided code context and a reported issue, then provide a detailed, actionable suggestion for improvement.
@@ -271,7 +272,7 @@ def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int, issu
     ```
 
     Please provide your analysis and suggestions in exactly three labeled sections.
-    **Crucially, ensure the 'Suggested Fix' section includes a code block formatted with triple backticks and the correct language identifier immediately after the opening backticks (e.g., ```{fence}\\n...code...\\n```).**
+    **Crucially, ensure the 'Suggested Fix' section includes a code block formatted with triple backticks and the correct language identifier immediately after the opening backticks (e.g., ```{fence}\n...code...\n```).**
     If showing original and corrected code, keep it within a single code block.
 
     **Analysis:**
@@ -446,43 +447,45 @@ for file_path, file_issues in sorted(file_groups.items()):
             ctx = get_patch_context(patch, ln)
             ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln, it['message'])
 
-            lang = detect_language(file_path)
-            fence = FENCE_BY_LANG.get(lang, '')
-
-            # --- [START] CORRECTED EXTRACTION LOGIC ---
+            # --- CORRECTED EXTRACTION LOGIC ---
             analysis_content = "No specific analysis provided."
             full_fix_content = "No suggested fix snippet provided."
             rationale_content = "No rationale provided."
 
-            analysis_match = re.search(r'^\*\*Analysis:\*\*\s*\n([\s\S]*?)(?=\n\*\*Suggested Fix:\*\*|$)', ai_out, re.MULTILINE)
+            # Regex to find sections. Using (?s) for dotall mode to match across lines.
+            # Adding non-greedy quantifiers (.*?) to ensure it stops at the next heading.
+            analysis_match = re.search(r'(?s)^\*\*Analysis:\*\*\s*\n(.*?)^\*\*Suggested Fix:\*\*', ai_out, re.MULTILINE)
             if analysis_match:
                 analysis_content = analysis_match.group(1).strip()
 
-            suggested_fix_match = re.search(r'^\*\*Suggested Fix:\*\*\s*\n([\s\S]*?)(?=\n\*\*Rationale:\*\*|$)', ai_out, re.MULTILINE)
+            suggested_fix_match = re.search(r'(?s)^\*\*Suggested Fix:\*\*\s*\n(.*?)^\*\*Rationale:\*\*', ai_out, re.MULTILINE)
             if suggested_fix_match:
-                # Directly use the entire content of the "Suggested Fix" section.
-                # The AI is prompted to include the code block here, so this will capture it.
+                # This should capture the descriptive text AND the code block within it.
                 full_fix_content = suggested_fix_match.group(1).strip()
             
-            rationale_match = re.search(r'^\*\*Rationale:\*\*\s*\n([\s\S]*?)(?=$)', ai_out, re.MULTILINE)
+            rationale_match = re.search(r'(?s)^\*\*Rationale:\*\*\s*\n(.*)$', ai_out, re.MULTILINE)
             if rationale_match:
                 rationale_content = rationale_match.group(1).strip()
-            # --- [END] CORRECTED EXTRACTION LOGIC ---
+            # --- END CORRECTED EXTRACTION LOGIC ---
 
 
             # Use the first few lines of the fix as a summary for the table
-            # We need to extract the code from the fix content for a clean summary
+            # Extract only the code part for the summary, if present
             summary_code_match = re.search(r'```(?:\w*\n)?([\s\S]*?)```', full_fix_content)
-            summary_text_for_table = full_fix_content
+            summary_text_for_table = ""
             if summary_code_match:
                 summary_text_for_table = summary_code_match.group(1).strip()
+            else:
+                # If no code block is found, take a snippet of the general text
+                summary_text_for_table = full_fix_content.splitlines()[0] if full_fix_content else "See details for suggested fix."
+
 
             summary_lines = summary_text_for_table.splitlines()[:3]
             summary = ' '.join(summary_lines).replace('|','\\|')
             if len(summary_text_for_table.splitlines()) > 3 or (len(summary_lines) == 1 and len(summary) > 50):
                 summary += '...'
             
-            # If the summary is empty after extraction, fall back to the raw content
+            # If the summary is empty after extraction, fall back to a default
             if not summary.strip():
                 summary = "See details for suggested fix."
 
@@ -492,7 +495,6 @@ for file_path, file_issues in sorted(file_groups.items()):
                 'analysis': analysis_content,
                 'full_fix': full_fix_content, # This now contains intro text + code block
                 'rationale': rationale_content,
-                'fence': fence # 'fence' is not strictly needed here but kept for context
             })
     md.append('') # Blank line after the table for this file
 
@@ -504,7 +506,7 @@ for file_path, file_issues in sorted(file_groups.items()):
             md.append('')
             md.append(f'**Analysis:**\n{detail["analysis"]}')
             md.append('')
-            # The full_fix content already has the code block, so just print it.
+            # Directly append the full_fix content. It is expected to contain the code block within it.
             md.append(f'**Suggested Fix:**\n{detail["full_fix"]}')
             md.append('')
             md.append(f'**Rationale:**\n{detail["rationale"]}')
@@ -561,7 +563,7 @@ if not issues:
     md.append('')
 
 
-# ── 9) POST COMMENT & STATUS ───────────────────────────────────────────
+# --- 9) POST COMMENT & STATUS ───────────────────────────────────────────
 final_comment_body = '\n'.join(md)
 try:
     pr.create_issue_comment(final_comment_body)
