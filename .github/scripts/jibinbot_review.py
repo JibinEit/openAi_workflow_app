@@ -235,8 +235,9 @@ def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> s
     prompt = dedent(f"""
 You are a highly experienced {lang} code reviewer and software architect.
 
-You will carefully analyze the provided code diff to identify **any and all issues** — not just the reported error. 
-Check for:
+You will carefully analyze the provided code diff to identify any and all issues — not just the reported error. 
+You must review for:
+
 - Syntax errors
 - Logic issues
 - Naming conventions
@@ -248,18 +249,28 @@ Check for:
 - {lang} best practices
 - Modern {lang} idioms
 - API misuse or potential bugs
+- Unnecessary redundancy or inefficiency
+
+You are analyzing a code diff that occurred in a Pull Request. Your task is to act as a **critical human reviewer** who must analyze both correctness and code quality.
 
 Below is the diff around line {line_no} in `{file_path}` (reported error: {code}):
+
 ```diff
 {patch_ctx}
-Provide exactly three labeled sections:
-
+Output Format:
 Fix:
-  Copy-friendly corrected snippet (include fences if multi-line).
+	•	Provide both Original: and Suggested: blocks.
+	•	If no fix is needed, still include both.
+	•	If the code is already correct, repeat the original code as suggested.
+	•	Use proper code fences (depending on {lang}).  (include fences if multi-line)
+
 Refactor:
-  Higher-level best-practice improvements.
+	•	Suggest any higher-level improvements that could improve code clarity, maintainability, or performance, even if not strictly necessary.
+	•	You may recommend minor cleanups, better patterns, or modern language idioms.
+
 Why:
-  Brief rationale.
+	•	Briefly explain the reasoning behind your fix and/or refactor suggestions.
+	•	If no issue exists, explain why the code is acceptable.
 """)
     system_prompt = (
     f"You are a senior {lang} software architect and code reviewer. "
