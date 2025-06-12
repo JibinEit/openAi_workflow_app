@@ -7,6 +7,8 @@ from textwrap import dedent
 import openai
 from github import Github
 import re # Make sure 'import re' is at the top of your Python file
+from datetime import datetime # Import datetime
+import pytz # Import pytz (ensure you have it installed)
 # --- 1) SETUP ──────────────────────────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
@@ -34,6 +36,8 @@ url          = event["pull_request"]["html_url"]
 source_branch = event["pull_request"]["head"]["ref"]
 target_branch = event["pull_request"]["base"]["ref"]
 created_at   = event["pull_request"]["created_at"]
+# Get the UTC timestamp string from GitHub
+created_at_utc_str = event["pull_request"]["created_at"]
 commits      = event["pull_request"]["commits"]
 additions    = event["pull_request"]["additions"]
 deletions    = event["pull_request"]["deletions"]
@@ -48,7 +52,37 @@ img_url = (
     f"https://raw.githubusercontent.com/"
     f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
 )
+# --- Timezone Conversion for 'created_at' ---
+try:
+    # 1. Parse the UTC timestamp string into a datetime object
+    # The 'Z' at the end means UTC. We parse based on ISO 8601 format.
+    utc_dt = datetime.strptime(created_at_utc_str, "%Y-%m-%dT%H:%M:%SZ")
 
+    # 2. Make the datetime object explicitly timezone-aware as UTC
+    utc_dt = pytz.utc.localize(utc_dt)
+
+    # 3. Define the target local timezone for Kochi, Kerala (IST)
+    local_tz = pytz.timezone('Asia/Kolkata')
+
+    # 4. Convert the UTC datetime to the local timezone
+    local_dt = utc_dt.astimezone(local_tz)
+
+    # 5. Format the local datetime object into a readable string
+    # Example format: "June 11, 2025, 05:22 PM IST"
+    # %B: Full month name (June)
+    # %d: Day of the month (11)
+    # %Y: Year (2025)
+    # %I: Hour (12-hour clock) (05)
+    # %M: Minute (22)
+    # %p: AM/PM (PM)
+    # %Z: Time zone name (IST)
+    formatted_created_at = local_dt.strftime("%B %d, %Y, %I:%M %p %Z")
+
+except Exception as e:
+    # Fallback in case of any parsing or conversion error
+    print(f"Warning: Could not parse or convert 'created_at' timestamp '{created_at_utc_str}': {e}. Using original UTC string.")
+    formatted_created_at = created_at_utc_str
+# --- End Timezone Conversion ---
 # --- 3) DETECT CHANGED FILES (exclude .github/) ─────────────────────────
 changed_files_list = [f.filename for f in pr.get_files()
                       if f.patch and not f.filename.lower().startswith('.github/')]
@@ -370,7 +404,7 @@ md.append(f"| **Title** | {title}                                               
 md.append(f"| **PR Link** | [#{pr_number}]({url})                                  |")
 md.append(f"| **Author** | @{dev_name}                                           |")
 md.append(f"| **Branches** | `{source_branch}` &#8594; `{target_branch}`             |") # Using Unicode arrow
-md.append(f"| **Opened On** | {created_at}                                          |")
+md.append(f"| **Opened On** | {formatted_created_at}                                 |")
 md.append(f"| **Commits** | {commits}                                             |")
 md.append(f"| **Lines Added** | {additions}                                           |")
 md.append(f"| **Lines Removed** | {deletions}                                           |")
@@ -531,7 +565,7 @@ if not issues:
     md.append(f"| **PR Link** | [#{pr_number}]({url})                                  |")
     md.append(f"| **Author** | @{dev_name}                                           |")
     md.append(f"| **Branches** | `{source_branch}` &#8594; `{target_branch}`             |") # Using Unicode arrow
-    md.append(f"| **Opened On** | {created_at}                                          |")
+    md.append(f"| **Opened On** | {formatted_created_at}                                 |")
     md.append(f"| **Commits** | {commits}                                             |")
     md.append(f"| **Lines Added** | <span style='color:green;'>+{additions}</span>         |") # Added inline styling
     md.append(f"| **Lines Removed** | <span style='color:red;'>-{deletions}</span>           |") # Added inline styling
