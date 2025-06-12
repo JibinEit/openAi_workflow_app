@@ -52,35 +52,30 @@ img_url = (
     f"https://raw.githubusercontent.com/"
     f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
 )
+
+# --- Dynamic Timezone Configuration ---
+# Get the target timezone name from an environment variable.
+# Provide a sensible default (e.g., 'UTC' or 'Asia/Kolkata' if that's your primary target)
+TARGET_TIMEZONE_NAME = os.getenv("TARGET_TIMEZONE", "Asia/Kolkata")
 # --- Timezone Conversion for 'created_at' ---
 try:
-    # 1. Parse the UTC timestamp string into a datetime object
-    # The 'Z' at the end means UTC. We parse based on ISO 8601 format.
     utc_dt = datetime.strptime(created_at_utc_str, "%Y-%m-%dT%H:%M:%SZ")
-
-    # 2. Make the datetime object explicitly timezone-aware as UTC
     utc_dt = pytz.utc.localize(utc_dt)
 
-    # 3. Define the target local timezone for Kochi, Kerala (IST)
-    local_tz = pytz.timezone('Asia/Kolkata')
+    # Use the dynamically set timezone name
+    local_tz = pytz.timezone(TARGET_TIMEZONE_NAME)
 
-    # 4. Convert the UTC datetime to the local timezone
     local_dt = utc_dt.astimezone(local_tz)
-
-    # 5. Format the local datetime object into a readable string
-    # Example format: "June 11, 2025, 05:22 PM IST"
-    # %B: Full month name (June)
-    # %d: Day of the month (11)
-    # %Y: Year (2025)
-    # %I: Hour (12-hour clock) (05)
-    # %M: Minute (22)
-    # %p: AM/PM (PM)
-    # %Z: Time zone name (IST)
     formatted_created_at = local_dt.strftime("%B %d, %Y, %I:%M %p %Z")
 
+except pytz.UnknownTimeZoneError:
+    print(f"⚠️ Warning: Unknown timezone '{TARGET_TIMEZONE_NAME}' specified. Falling back to UTC.")
+    local_tz = pytz.utc # Fallback to UTC if the provided timezone is invalid
+    local_dt = utc_dt.astimezone(local_tz)
+    formatted_created_at = local_dt.strftime("%B %d, %Y, %I:%M %p %Z")
 except Exception as e:
-    # Fallback in case of any parsing or conversion error
-    print(f"Warning: Could not parse or convert 'created_at' timestamp '{created_at_utc_str}': {e}. Using original UTC string.")
+    # Catch any other potential errors during parsing or conversion
+    print(f"❌ Error during time conversion for '{created_at_utc_str}': {e}. Falling back to original UTC string.")
     formatted_created_at = created_at_utc_str
 # --- End Timezone Conversion ---
 # --- 3) DETECT CHANGED FILES (exclude .github/) ─────────────────────────

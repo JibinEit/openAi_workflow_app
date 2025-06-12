@@ -151,5 +151,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
+          TARGET_TIMEZONE: Asia/Kolkata
         run: |
           python .github/scripts/jibinbot_review.py
