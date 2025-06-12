@@ -362,22 +362,19 @@ for line in rating.splitlines():
     md.append(f"> {line}")
 
 md.append("---")
-# PR Details
-md.append("### Pull Request Metadata")
+md.append("### 📝 Pull Request Overview")
 md.append("")
-md.append(f"- **Title:** {title}")
-md.append(f"- **PR Link:** [#{pr_number}]({url})")
-md.append(f"- **Author:** @{dev_name}")
-md.append(f"- **Branch:** `{source_branch}` → `{target_branch}`")
-md.append(f"- **Opened On:** {created_at}")
-md.append("")
-
-# Change Statistics
-md.append("### Change Statistics")
-md.append(f"- **Commits:** {commits}")
-md.append(f"- **Lines Added:** {additions}")
-md.append(f"- **Lines Removed:** {deletions}")
-md.append(f"- **Files Changed:** {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`)")
+md.append("| Detail               | Value                                                 |")
+md.append("|:---------------------|:------------------------------------------------------|")
+md.append(f"| **Title** | {title}                                               |")
+md.append(f"| **PR Link** | [#{pr_number}]({url})                                  |")
+md.append(f"| **Author** | @{dev_name}                                           |")
+md.append(f"| **Branches** | `{source_branch}` &#8594; `{target_branch}`             |") # Using Unicode arrow
+md.append(f"| **Opened On** | {created_at}                                          |")
+md.append(f"| **Commits** | {commits}                                             |")
+md.append(f"| **Lines Added** | {additions}                                           |")
+md.append(f"| **Lines Removed** | {deletions}                                           |")
+md.append(f"| **Files Changed** | {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`) |")
 md.append("---")
 md.append(dedent("""
 Thank you for your contribution! A few adjustments are recommended before this Pull Request can be merged.
@@ -502,7 +499,7 @@ for file_path, file_issues in sorted(file_groups.items()):
     if details_for_file:
         for detail in details_for_file:
             md.append('<details>')
-            md.append(f'<summary><strong>⚙️ Line {detail["line"]} – Detailed AI Insights</strong> (click to expand)</summary>')
+            md.append(f'<summary><strong>⚙️ Line {detail["line"]} – Detailed AI Insights ---------------------------------</strong> (click to expand)</summary>')
             md.append('')
             md.append(f'**Analysis:**\n{detail["analysis"]}')
             md.append('')
