@@ -259,6 +259,9 @@ Below is the diff around line {line_no} in `{file_path}` (reported error: {code}
 {patch_ctx}
 Output Format:
 Fix:
+Do not skip code block. Always output both:
+- Original: (best possible)
+- Suggested: (best possible)
 	•	Provide both Original: and Suggested: blocks.
 	•	If no fix is needed, still include both.
 	•	If the code is already correct, repeat the original code as suggested.
