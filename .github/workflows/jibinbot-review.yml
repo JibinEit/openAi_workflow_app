@@ -1,3 +1,5 @@
+# .github/workflows/jibinbot-review.yml
+
 name: "brandOptics AI Code Review - Test Bot"
 
 on:
@@ -31,9 +33,9 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          # Combined all Python installs into one command for efficiency
-          pip install openai PyGithub==1.59.0 flake8 flake8-json pytz
-
+          pip install openai PyGithub flake8 flake8-json
+      - name: Install Python dependencies
+        run: pip install pytz
       # ── 4) SET UP NODE & ESLINT ────────────────────────────────────────
       - name: Set up Node 18
         uses: actions/setup-node@v4
@@ -58,9 +60,7 @@ jobs:
         run: dotnet tool install -g dotnet-format
       - name: Run dotnet-format
         run: |
-          # The '|| true' allows the workflow to continue even if dotnet format exits with an error
-          # (e.g., if there are no C# files or if formatting issues exist).
-          dotnet format --verify-no-changes --report .github/linter-reports/dotnet-format.json --report-format json || true
+          dotnet format --verify-no-changes --report .github/linter-reports/dotnet-format.json || true
 
       # ── 8) INSTALL FLUTTER SDK ─────────────────────────────────────────
       - name: Install Flutter SDK (stable channel)
@@ -75,75 +75,50 @@ jobs:
       # ── 10) RUN ESLINT (JS/TS/React/Angular) ───────────────────────────
       - name: Run ESLint
         run: |
-          # Ensure eslint config exists or install one, e.g., 'npm init @eslint/config'
-          # or `npm install --save-dev eslint-config-airbnb-base eslint-plugin-import`
-          # This example assumes you have an eslint config in your project.
-          if find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) | grep -q .; then
+          FILES=$(find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \))
+          if [ -n "$FILES" ]; then
             eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' \
               --format json \
               --output-file .github/linter-reports/eslint.json || true
-          else
-            echo "No relevant JS/TS files found for ESLint. Creating empty report."
-            echo '[]' > .github/linter-reports/eslint.json
           fi
-
 
       # ── 11) RUN FLAKE8 (Python) ────────────────────────────────────────
       - name: Run Flake8
         run: |
-          if find . -type f -name "*.py" | grep -q .; then
+          FILES=$(find . -type f -name "*.py")
+          if [ -n "$FILES" ]; then
             flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
-          else
-            echo "No Python files found for Flake8. Creating empty report."
-            echo '{}' > .github/linter-reports/flake8.json
           fi
 
       # ── 12) RUN STYLELINT (CSS/SCSS/LESS) ─────────────────────────────
       - name: Install Stylelint
-        run: npm install -g stylelint stylelint-config-standard # or install locally via package.json
+        run: npm install -g stylelint stylelint-config-standard
       - name: Run Stylelint
         run: |
-          if find . -type f \( -name "*.css" -o -name "*.scss" -o -name "*.less" \) | grep -q .; then
+          FILES=$(find . -type f \( -name "*.css" -o -name "*.scss" -o -name "*.less" \))
+          if [ -n "$FILES" ]; then
             stylelint "**/*.{css,scss,less}" \
               --formatter json \
               --output-file .github/linter-reports/stylelint.json || true
-          else
-            echo "No CSS/SCSS/LESS files found for Stylelint. Creating empty report."
-            echo '[]' > .github/linter-reports/stylelint.json
           fi
 
       # ── 13) RUN HTMLHINT (HTML) ────────────────────────────────────────
       - name: Install HTMLHint
-        run: npm install -g htmlhint # or install locally via package.json
+        run: npm install -g htmlhint
       - name: Run HTMLHint
         run: |
-          if find . -type f -name "*.html" | grep -q .; then
+          FILES=$(find . -type f -name "*.html")
+          if [ -n "$FILES" ]; then
             htmlhint --format json **/*.html > .github/linter-reports/htmlhint.json || true
-          else
-            echo "No HTML files found for HTMLHint. Creating empty report."
-            echo '[]' > .github/linter-reports/htmlhint.json
           fi
 
       # ── 14) RUN SHELLCHECK (Shell scripts) ─────────────────────────────
       - name: Run ShellCheck
         run: |
-          if find . -type f -name "*.sh" | grep -q .; then
-            # Shellcheck does not directly support outputting all results to one file with `find | xargs`
-            # when using json format. It generates a single JSON array per file.
-            # We'll collect individual outputs and combine them.
-            echo '[' > .github/linter-reports/shellcheck.json # Start a JSON array
-            FIRST_FILE=true
-            for FILE in $(find . -type f -name "*.sh"); do
-                if [ "$FIRST_FILE" = false ]; then
-                    echo "," >> .github/linter-reports/shellcheck.json # Add comma for subsequent entries
-                fi
-                shellcheck -f json "$FILE" 2>/dev/null | sed -e 's/^\[//' -e 's/\]$//' >> .github/linter-reports/shellcheck.json || true
-                FIRST_FILE=false
-            done
-            echo ']' >> .github/linter-reports/shellcheck.json # End the JSON array
-          else
-            echo "No shell scripts found for ShellCheck. Creating empty report."
-            echo '[]' > .github/linter-reports/shellcheck.json
+          FILES=$(find . -type f -name "*.sh")
+          if [ -n "$FILES" ]; then
+            find . -type f -name "*.sh" \
+              | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
           fi
 
       # ── 15) FETCH DART/FLUTTER DEPENDENCIES ────────────────────────────
@@ -176,6 +151,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
-          TARGET_TIMEZONE: Asia/Kolkata
+          
         run: |
-          python .github/scripts/main.py # This is the key change!
+          python .github/scripts/jibinbot_review.py
