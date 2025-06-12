@@ -259,13 +259,10 @@ Below is the diff around line {line_no} in `{file_path}` (reported error: {code}
 {patch_ctx}
 Output Format:
 Fix:
-Do not skip code block. Always output both:
-- Original (best possible) (include {lang}fences if multi-line)
-- Suggested (best possible) (include {lang}fences if multi-line)
-	•	Provide both Original and Suggested blocks. (include {lang}fences if multi-line)
-	•	If no fix is needed, still include both. (include {lang}fences if multi-line)
-	•	If the code is already correct, repeat the original code as suggested. (include {lang}fences if multi-line)
-	•	Use proper code fences (depending on {lang}).(include {lang}fences if multi-line)
+	•	Provide both Original and Suggested blocks. 
+	•	If no fix is needed, still include both. 
+	•	If the code is already correct, repeat the original code as suggested. 
+	•	Use proper code fences (depending on {lang} if multi-line) 
 
 Refactor:
 	•	Suggest any higher-level improvements that could improve code clarity, maintainability, or performance, even if not strictly necessary.
