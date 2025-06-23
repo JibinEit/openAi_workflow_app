@@ -188,7 +188,7 @@ jobs:
         if: needs.detect.outputs.has_py == 'true'
         uses: actions/setup-python@v4
         with:
-          python-version: 3.10
+          python-version: '3.10'
 
       - name: Install Flake8
         if: needs.detect.outputs.has_py == 'true'
