@@ -12,145 +12,243 @@ permissions:
   statuses: write
 
 jobs:
-  review:
-    name: "Run Bot Review"
+  # ── 0) DETECT PROJECT ROOT & LANGUAGES ───────────────────────────────────────
+  detect:
     runs-on: ubuntu-latest
-
+    outputs:
+      project_root: ${{ steps.detect.outputs.project_root }}
+      has_react:    ${{ steps.detect.outputs.has_react }}
+      has_angular:  ${{ steps.detect.outputs.has_angular }}
+      has_py:       ${{ steps.detect.outputs.has_py }}
+      has_dotnet:   ${{ steps.detect.outputs.has_dotnet }}
+      has_flutter:  ${{ steps.detect.outputs.has_flutter }}
     steps:
-      # ── 1) CHECKOUT THE CODE ────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - id: detect
+        name: Find project root and detect languages
+        run: |
+          # locate first package.json to set project root
+          pkg=$(find . -type f -name package.json | head -n1)
+          if [ -n "$pkg" ]; then
+            root=$(dirname "$pkg")
+          else
+            root="."
+          fi
+          echo "project_root=$root" >> $GITHUB_OUTPUT
+
+          # initialize flags
+          has_react=false
+          has_angular=false
+          has_py=false
+          has_dotnet=false
+          has_flutter=false
+
+          # detect in that root
+          if [ -f "$root/package.json" ]; then
+            if grep -q '"react"[[:space:]]*:' "$root/package.json"; then
+              has_react=true
+            fi
+            if grep -q '"@angular/core"' "$root/package.json"; then
+              has_angular=true
+            fi
+          fi
+
+          # Python anywhere
+          if find "$root" -type f -name '*.py' | grep -q .; then
+            has_py=true
+          fi
+
+          # .NET anywhere
+          if find "$root" -type f -name '*.sln' | grep -q .; then
+            has_dotnet=true
+          fi
+
+          # Flutter anywhere
+          if find "$root" -type f -name 'pubspec.yaml' | grep -q .; then
+            has_flutter=true
+          fi
+
+          # export flags
+          echo "has_react=$has_react"     >> $GITHUB_OUTPUT
+          echo "has_angular=$has_angular" >> $GITHUB_OUTPUT
+          echo "has_py=$has_py"           >> $GITHUB_OUTPUT
+          echo "has_dotnet=$has_dotnet"   >> $GITHUB_OUTPUT
+          echo "has_flutter=$has_flutter" >> $GITHUB_OUTPUT
+
+          # debug
+          echo "::group::🛠️ Detection Results"
+          echo "Project root:   $root"
+          echo "React:          $has_react"
+          echo "Angular:        $has_angular"
+          echo "Python:         $has_py"
+          echo ".NET:           $has_dotnet"
+          echo "Flutter:        $has_flutter"
+          echo "::endgroup::"
+
+  # ── 1) REVIEW: SETUP & RUN LINTERS + BOT ─────────────────────────────────
+  review:
+    needs: detect
+    runs-on: ubuntu-latest
+    steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ── 2) SET UP PYTHON ────────────────────────────────────────────────
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
+      - name: Prepare reports directory
+        run: mkdir -p .github/linter-reports
 
-      # ── 3) INSTALL PYTHON DEPENDENCIES ─────────────────────────────────
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install openai PyGithub flake8 flake8-json
-      - name: Install Python dependencies
-        run: pip install pytz
-      # ── 4) SET UP NODE & ESLINT ────────────────────────────────────────
-      - name: Set up Node 18
+      # ── React (ESLint + Flat Config) ─────────────────────────────────────────
+      - name: Setup Node.js for React
+        if: needs.detect.outputs.has_react == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
-      - name: Install ESLint
-        run: npm install -g eslint
+          node-version: 18
 
-      # ── 5) INSTALL SHELLCHECK ──────────────────────────────────────────
-      - name: Install ShellCheck
+      - name: Install React ESLint dependencies
+        if: needs.detect.outputs.has_react == 'true'
+        working-directory: ${{ needs.detect.outputs.project_root }}
         run: |
-          sudo apt-get update && sudo apt-get install -y shellcheck
+          npm install --no-save \
+            eslint @eslint/js \
+            @babel/core \
+            @babel/eslint-parser \
+            @babel/preset-react \
+            eslint-plugin-react \
+            eslint-plugin-react-hooks \
+            eslint-plugin-react-refresh \
+            eslint-plugin-jsx-a11y \
+            eslint-plugin-import \
+            eslint-plugin-sonarjs
 
-      # ── 6) INSTALL .NET SDK ────────────────────────────────────────────
+      - name: Dump project_root contents
+        if: needs.detect.outputs.has_react == 'true'
+        run: |
+          echo "=== ROOT CONTENTS ==="
+          ls -R "${{ needs.detect.outputs.project_root }}"
+
+      - name: Check ESLint version
+        if: needs.detect.outputs.has_react == 'true'
+        run: |
+          echo "ESLint version:"
+          npx eslint -v
+
+      - name: Validate ESLint setup
+        if: needs.detect.outputs.has_react == 'true'
+        working-directory: ${{ needs.detect.outputs.project_root }}
+        run: |
+          echo "Checking ESLint config..."
+          npx eslint --print-config index.js > /dev/null || echo "⚠️ ESLint config validation failed"
+
+      - name: Run ESLint (React)
+        if: needs.detect.outputs.has_react == 'true'
+        working-directory: ${{ needs.detect.outputs.project_root }}
+        run: |
+          npx eslint . \
+            --config eslint.config.js \
+            --max-warnings=1000 \
+            --format json \
+            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || echo "🟠 ESLint finished with errors (but continued)"
+
+      - name: Dump ESLint report
+        if: needs.detect.outputs.has_react == 'true'
+        run: |
+          echo "=== ESLINT.JSON ==="
+          cat .github/linter-reports/eslint.json || echo "(missing or empty)"
+
+      # ── Angular (ESLint + Angular plugin) ─────────────────────────────────
+      - name: Setup Node.js for Angular
+        if: needs.detect.outputs.has_angular == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Angular ESLint deps
+        if: needs.detect.outputs.has_angular == 'true'
+        working-directory: ${{ needs.detect.outputs.project_root }}
+        run: |
+          npm install --no-save \
+            eslint @eslint/js \
+            @angular-eslint/eslint-plugin \
+            @angular-eslint/eslint-config \
+            eslint-plugin-import
+
+      - name: Run ESLint (Angular)
+        if: needs.detect.outputs.has_angular == 'true'
+        working-directory: ${{ needs.detect.outputs.project_root }}
+        run: |
+          npx eslint 'src/**/*.{ts,tsx}' \
+            --format json \
+            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+
+      # ── Python (Flake8) ─────────────────────────────────────────────────────
+      - name: Set up Python
+        if: needs.detect.outputs.has_py == 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+
+      - name: Install Flake8
+        if: needs.detect.outputs.has_py == 'true'
+        run: pip install flake8 flake8-json
+
+      - name: Run Flake8
+        if: needs.detect.outputs.has_py == 'true'
+        working-directory: ${{ needs.detect.outputs.project_root }}
+        run: |
+          FILES=$(find . -type f -name "*.py")
+          if [ -n "$FILES" ]; then
+            flake8 . --format=json --output-file "$GITHUB_WORKSPACE/.github/linter-reports/flake8.json" || true
+          fi
+
+      # ── .NET (dotnet-format) ───────────────────────────────────────────────
       - name: Set up .NET SDK
+        if: needs.detect.outputs.has_dotnet == 'true'
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: "7.0.x"
+          dotnet-version: 7.0.x
 
-      # ── 7) INSTALL dotnet-format & PRODUCE JSON ────────────────────────
       - name: Install dotnet-format
+        if: needs.detect.outputs.has_dotnet == 'true'
         run: dotnet tool install -g dotnet-format
-      - name: Run dotnet-format
-        run: |
-          dotnet format --verify-no-changes --report .github/linter-reports/dotnet-format.json || true
 
-      # ── 8) INSTALL FLUTTER SDK ─────────────────────────────────────────
-      - name: Install Flutter SDK (stable channel)
+      - name: Run dotnet-format
+        if: needs.detect.outputs.has_dotnet == 'true'
+        working-directory: ${{ needs.detect.outputs.project_root }}
+        run: |
+          dotnet format --verify-no-changes --report "$GITHUB_WORKSPACE/.github/linter-reports/dotnet-format.json" || true
+
+      # ── Flutter (Dart Analyzer) ─────────────────────────────────────────────
+      - name: Set up Flutter
+        if: needs.detect.outputs.has_flutter == 'true'
         uses: subosito/flutter-action@v2
         with:
           channel: stable
 
-      # ── 9) PREPARE LINTER-REPORTS FOLDER ───────────────────────────────
-      - name: Create linter-reports directory
-        run: mkdir -p .github/linter-reports
+      - name: Fetch Flutter dependencies
+        if: needs.detect.outputs.has_flutter == 'true'
+        working-directory: ${{ needs.detect.outputs.project_root }}
+        run: flutter pub get
 
-      # ── 10) RUN ESLINT (JS/TS/React/Angular) ───────────────────────────
-      - name: Run ESLint
+      - name: Run Dart Analyzer
+        if: needs.detect.outputs.has_flutter == 'true'
+        working-directory: ${{ needs.detect.outputs.project_root }}
         run: |
-          FILES=$(find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \))
-          if [ -n "$FILES" ]; then
-            eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' \
-              --format json \
-              --output-file .github/linter-reports/eslint.json || true
-          fi
+          dart analyze --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/dartanalyzer.json" || true
 
-      # ── 11) RUN FLAKE8 (Python) ────────────────────────────────────────
-      - name: Run Flake8
+      # ── AI REVIEW BOT ───────────────────────────────────────────────────────
+      - name: Install Python deps for bot
         run: |
-          FILES=$(find . -type f -name "*.py")
-          if [ -n "$FILES" ]; then
-            flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
-          fi
+          python -m pip install --upgrade pip
+          pip install openai PyGithub pytz
 
-      # ── 12) RUN STYLELINT (CSS/SCSS/LESS) ─────────────────────────────
-      - name: Install Stylelint
-        run: npm install -g stylelint stylelint-config-standard
-      - name: Run Stylelint
-        run: |
-          FILES=$(find . -type f \( -name "*.css" -o -name "*.scss" -o -name "*.less" \))
-          if [ -n "$FILES" ]; then
-            stylelint "**/*.{css,scss,less}" \
-              --formatter json \
-              --output-file .github/linter-reports/stylelint.json || true
-          fi
-
-      # ── 13) RUN HTMLHINT (HTML) ────────────────────────────────────────
-      - name: Install HTMLHint
-        run: npm install -g htmlhint
-      - name: Run HTMLHint
-        run: |
-          FILES=$(find . -type f -name "*.html")
-          if [ -n "$FILES" ]; then
-            htmlhint --format json **/*.html > .github/linter-reports/htmlhint.json || true
-          fi
-
-      # ── 14) RUN SHELLCHECK (Shell scripts) ─────────────────────────────
-      - name: Run ShellCheck
-        run: |
-          FILES=$(find . -type f -name "*.sh")
-          if [ -n "$FILES" ]; then
-            find . -type f -name "*.sh" \
-              | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
-          fi
-
-      # ── 15) FETCH DART/FLUTTER DEPENDENCIES ────────────────────────────
-      - name: Fetch dependencies for Flutter/Dart
-        run: |
-          if [ -f "pubspec.yaml" ]; then
-            flutter pub get
-          fi
-
-      # ── 16) RUN FLUTTER/DART ANALYZER ──────────────────────────────────
-      - name: Run Dart/Flutter Analyzer
-        run: |
-          if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
-            dart analyze --format=json > .github/linter-reports/dartanalyzer.json || true
-          else
-            echo '{"issues":[]}' > .github/linter-reports/dartanalyzer.json
-          fi
-
-      # ── 17) DEBUG: SHOW FIRST LINES OF ANALYZER JSON ───────────────────
-      - name: Dump first lines of analyzer JSON
-        run: |
-          echo "=== begin dartanalyzer.json ==="
-          head -n 20 .github/linter-reports/dartanalyzer.json || echo "(file is empty)"
-          echo "=== end dartanalyzer.json ==="
-
-      # ── 18) RUN THE AI REVIEW SCRIPT ───────────────────────────────────
       - name: Run Bot AI review
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
-          TARGET_TIMEZONE: Asia/Kolkata
-        run: |
-          python .github/scripts/jibinbot_review.py
+          TARGET_TIMEZONE:   Asia/Kolkata
+        run: python .github/scripts/jibinbot_review.py
